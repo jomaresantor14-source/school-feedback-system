@@ -20,7 +20,7 @@ Schools often collect feedback through informal channels, so concerns get lost a
 | Laurza, Eddbert R. | Frontend, pages, forms, UI |
 | [Member 3 name] | Database, authentication, testing |
 
-Team name: [Team name] · Course/Section: [Course and section]
+Team name: ReneeGan · Course/Section: BSIT - 3E
 
 ## Features
 
@@ -73,7 +73,7 @@ New feedback starts as **Pending** and unassigned. An admin assigns a department
 
 ## Installation and Setup
 
-**Requirements:** [Node.js](https://nodejs.org/) and MySQL (for example XAMPP).
+**Requirements:** [Node.js](https://nodejs.org/) and MySQL XAMPP.
 
 1. **Get the code**
    ```
