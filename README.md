@@ -17,7 +17,7 @@ Schools often collect feedback through informal channels, so concerns get lost a
 | Name | Primary responsibility |
 |---|---|
 | [Member 1 name] | Backend, routes, business logic |
-| [Member 2 name] | Frontend, pages, forms, UI |
+| Laurza, Eddbert R. | Frontend, pages, forms, UI |
 | [Member 3 name] | Database, authentication, testing |
 
 Team name: [Team name] · Course/Section: [Course and section]
