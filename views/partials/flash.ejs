@@ -1,0 +1,6 @@
+<% if (locals.flash) { %>
+    <div class="alert alert--<%= flash.type %>" role="status">
+        <%- icon(flash.type === 'success' ? 'check' : 'alert', 18) %>
+        <span><%= flash.message %></span>
+    </div>
+<% } %>

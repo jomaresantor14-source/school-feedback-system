@@ -1,0 +1,31 @@
+<%- include('partials/head', { title: 'Staff login', bodyClass: 'body--auth' }) %>
+
+<main id="main" class="auth">
+    <div class="auth__panel card">
+        <a class="brand" href="/"><%- include('partials/brand') %></a>
+        <h1>Staff login</h1>
+        <p class="muted">Log in to review and manage feedback.</p>
+
+        <% if (error) { %>
+            <div class="alert alert--error" role="alert"><%- icon('alert', 18) %><span><%= error %></span></div>
+        <% } %>
+
+        <form action="/auth/login" method="POST" class="form">
+            <div class="field">
+                <label for="email">Email address</label>
+                <input class="input" type="email" id="email" name="email" value="<%= email %>" autocomplete="username" required autofocus>
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <input class="input" type="password" id="password" name="password" autocomplete="current-password" required>
+            </div>
+
+            <button type="submit" class="btn btn--primary btn--lg btn--block">Log in</button>
+        </form>
+
+        <p class="auth__back"><a href="/"><%- icon('back', 16) %> Back to home</a></p>
+    </div>
+</main>
+
+<%- include('partials/foot') %>

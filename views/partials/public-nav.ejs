@@ -1,0 +1,15 @@
+<% const here = locals.currentUrl || ''; const me = locals.user || null; %>
+<header class="site-header">
+    <div class="site-header__inner">
+        <a class="brand" href="/"><%- include('brand') %></a>
+        <nav class="site-nav" aria-label="Main">
+            <a href="/feedback/submit"<%- here.startsWith('/feedback/submit') ? ' aria-current="page"' : '' %>>Submit feedback</a>
+            <a href="/feedback/track"<%- here.startsWith('/feedback/track') ? ' aria-current="page"' : '' %>>Track submission</a>
+            <% if (me) { %>
+                <a class="btn btn--primary btn--sm" href="/staff/dashboard">Dashboard</a>
+            <% } else { %>
+                <a class="btn btn--ghost btn--sm" href="/auth/login">Staff login</a>
+            <% } %>
+        </nav>
+    </div>
+</header>

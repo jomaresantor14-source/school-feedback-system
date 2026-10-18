@@ -1,0 +1,100 @@
+<%- include('partials/head', { title: feedback.subject }) %>
+<%- include('partials/staff-open') %>
+
+<a class="back-link" href="<%= back.href %>"><%- icon('back', 16) %><%= back.text %></a>
+
+<div class="page-head page-head--row">
+    <div>
+        <h1><%= feedback.subject %></h1>
+        <p class="muted">Reference <%= formatRef(feedback.reference_code) %></p>
+    </div>
+    <%- include('partials/status-badge', { badgeStatus: feedback.status_name }) %>
+</div>
+
+<%- include('partials/flash') %>
+
+<div class="detail">
+    <div class="detail__main">
+        <section class="card">
+            <h2>What was submitted</h2>
+            <p class="prose"><%= feedback.description %></p>
+        </section>
+
+        <section class="card">
+            <h2>Activity</h2>
+            <ol class="timeline">
+                <% events.forEach(event => { %>
+                    <li class="timeline__item">
+                        <span class="timeline__dot <%= event.kind === 'assignment' ? 'timeline__dot--assign' : (event.status ? 'timeline__dot--' + statusClass(event.status) : '') %>"></span>
+                        <div>
+                            <p class="timeline__title"><%= event.title %></p>
+                            <p class="timeline__meta"><%= event.by ? event.by + ', ' : '' %><%= fmtDate(event.at) %></p>
+                            <% if (event.remarks) { %><p class="timeline__note"><%= event.remarks %></p><% } %>
+                        </div>
+                    </li>
+                <% }) %>
+            </ol>
+        </section>
+    </div>
+
+    <aside class="detail__side">
+        <section class="card">
+            <h2>Details</h2>
+            <dl class="facts facts--stack">
+                <div><dt>Submitted by</dt><dd><%= submitter %><% if (submitterEmail) { %><span class="sub"><%= submitterEmail %></span><% } %></dd></div>
+                <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
+                <div><dt>Department</dt><dd><%= feedback.department_name || 'Not assigned' %></dd></div>
+                <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>
+            </dl>
+        </section>
+
+        <% if (canUpdate) { %>
+            <section class="card">
+                <h2>Update status</h2>
+                <form class="form" action="/feedback/view/<%= feedback.id %>/status" method="POST">
+                    <%- include('partials/csrf') %>
+                    <div class="field">
+                        <label for="status_id">Status</label>
+                        <select class="input" id="status_id" name="status_id" required>
+                            <% statuses.forEach(s => { %>
+                                <option value="<%= s.id %>" <%= s.id === feedback.status_id ? 'selected' : '' %>><%= s.status_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="remarks">Note <span class="optional">(optional)</span></label>
+                        <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="What changed, or what is being done?"></textarea>
+                        <p class="hint">The person who submitted this can see your note on the tracking page.</p>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--block">Save</button>
+                </form>
+            </section>
+        <% } %>
+
+        <% if (canAssign) { %>
+            <section class="card">
+                <h2>Assign department</h2>
+                <form class="form" action="/feedback/view/<%= feedback.id %>/assign" method="POST">
+                    <%- include('partials/csrf') %>
+                    <div class="field">
+                        <label for="department_id">Department</label>
+                        <select class="input" id="department_id" name="department_id" required>
+                            <option value="">Choose a department</option>
+                            <% departments.forEach(d => { %>
+                                <option value="<%= d.id %>" <%= Number(feedback.assigned_department_id) === d.id ? 'selected' : '' %>><%= d.department_name %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn--ghost btn--block">Assign</button>
+                </form>
+            </section>
+        <% } %>
+
+        <% if (!canUpdate) { %>
+            <p class="muted read-only"><%- icon('lock', 14) %> You have read-only access to this record.</p>
+        <% } %>
+    </aside>
+</div>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>

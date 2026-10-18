@@ -1,0 +1,71 @@
+<%- include('partials/head', { title: 'Share your feedback' }) %>
+<%- include('partials/public-nav') %>
+
+<main id="main">
+    <section class="hero container">
+        <div class="hero__copy">
+            <h1>Tell the school what needs to change.</h1>
+            <p class="lede">
+                Send feedback, a suggestion, or a concern. Use your name or stay anonymous.
+                You get a reference code to follow it from first review to resolution.
+            </p>
+
+            <div class="actions">
+                <a class="btn btn--primary btn--lg" href="/feedback/submit">Submit feedback</a>
+                <a class="btn btn--ghost btn--lg" href="/feedback/track">Track a submission</a>
+            </div>
+
+            <% if (stats && stats.total > 0) { %>
+                <p class="hero__proof">
+                    <strong><%= stats.total %></strong> <%= stats.total === 1 ? 'submission' : 'submissions' %> received,
+                    <strong><%= stats.resolved %></strong> resolved so far.
+                </p>
+            <% } %>
+        </div>
+
+        <figure class="ticket" aria-label="Example of a reference ticket">
+            <div class="ticket__main">
+                <span class="ticket__label">Reference code</span>
+                <span class="ticket__code">9B5F-485A-7549-2EE0</span>
+                <p class="ticket__subject">Water fountain on the 2nd floor is broken</p>
+                <ol class="mini-steps">
+                    <li class="is-done">Pending</li>
+                    <li class="is-done">Under review</li>
+                    <li class="is-current">In progress</li>
+                    <li>Resolved</li>
+                </ol>
+            </div>
+            <div class="ticket__stub" aria-hidden="true"><span>Example</span></div>
+        </figure>
+    </section>
+
+    <section class="container section">
+        <h2>How it works</h2>
+        <ol class="steps">
+            <li>
+                <h3>Write it down</h3>
+                <p>Pick a category, give it a short subject, and explain what happened or what you would like to see.</p>
+            </li>
+            <li>
+                <h3>Keep your code</h3>
+                <p>Right after you submit, you get a reference code. It is the only thing you need to follow up, even if you stayed anonymous.</p>
+            </li>
+            <li>
+                <h3>Follow it through</h3>
+                <p>The right office reviews your submission. Enter your code on the tracking page to see its status and any notes.</p>
+            </li>
+        </ol>
+    </section>
+
+    <% if (categories.length) { %>
+        <section class="container section section--tight">
+            <h2>What you can write about</h2>
+            <ul class="chips">
+                <% categories.forEach(c => { %><li><%= c.category_name %></li><% }) %>
+            </ul>
+        </section>
+    <% } %>
+</main>
+
+<%- include('partials/public-footer') %>
+<%- include('partials/foot') %>

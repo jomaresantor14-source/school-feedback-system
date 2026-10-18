@@ -1,0 +1,33 @@
+<%- include('partials/head', { title: 'Feedback submitted' }) %>
+<%- include('partials/public-nav') %>
+
+<main id="main" class="container container--narrow page page--center">
+    <div class="page-head">
+        <span class="success-mark" aria-hidden="true"><%- icon('check', 28) %></span>
+        <h1>Thank you. Your feedback is in.</h1>
+        <p class="lede lede--sm">Save the code below. It is the only way to check on this submission later.</p>
+    </div>
+
+    <figure class="ticket ticket--big" aria-label="Your reference code">
+        <div class="ticket__main">
+            <span class="ticket__label">Your reference code</span>
+            <span class="ticket__code" id="ref-code"><%= formatRef(reference_code) %></span>
+            <div class="actions actions--left">
+                <button type="button" class="btn btn--primary" data-copy="<%= reference_code %>">
+                    <%- icon('copy', 16) %><span data-copy-label>Copy code</span>
+                </button>
+                <button type="button" class="btn btn--ghost" data-print><%- icon('print', 16) %>Print</button>
+            </div>
+        </div>
+        <div class="ticket__stub" aria-hidden="true"><span>Keep me</span></div>
+    </figure>
+
+    <div class="actions">
+        <a class="btn btn--primary" href="/feedback/track?code=<%= reference_code %>">Track this submission</a>
+        <a class="btn btn--ghost" href="/feedback/submit">Submit another</a>
+        <a class="btn btn--ghost" href="/">Back to home</a>
+    </div>
+</main>
+
+<%- include('partials/public-footer') %>
+<%- include('partials/foot') %>

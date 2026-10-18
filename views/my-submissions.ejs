@@ -1,0 +1,41 @@
+<%- include('partials/head', { title: pageTitle }) %>
+<%- include('partials/staff-open') %>
+
+<div class="page-head page-head--row">
+    <div>
+        <h1><%= pageTitle %></h1>
+        <p class="muted"><%= intro %></p>
+    </div>
+    <a class="btn btn--primary" href="/feedback/submit"><%- icon('plus', 16) %>New feedback</a>
+</div>
+
+<%- include('partials/flash') %>
+
+<% if (rows.length === 0) { %>
+    <section class="card empty-card">
+        <h2>You have not sent any feedback yet</h2>
+        <p class="muted">Feedback you submit while logged in will show up here.</p>
+        <a class="btn btn--primary" href="/feedback/submit">Submit feedback</a>
+    </section>
+<% } else { %>
+    <ul class="card-list">
+        <% rows.forEach(item => { %>
+            <li class="card item">
+                <div class="item__main">
+                    <h2><%= item.subject %></h2>
+                    <p class="muted"><%= item.category_name %>, submitted <%= fmtDate(item.created_at) %></p>
+                    <p class="sub">Reference <%= formatRef(item.reference_code) %></p>
+                </div>
+                <div class="item__side">
+                    <%- include('partials/status-badge', { badgeStatus: item.status_name }) %>
+                    <a class="btn btn--ghost btn--sm" href="/feedback/track?code=<%= item.reference_code %>">View progress</a>
+                </div>
+            </li>
+        <% }) %>
+    </ul>
+
+    <%- include('partials/pager') %>
+<% } %>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>

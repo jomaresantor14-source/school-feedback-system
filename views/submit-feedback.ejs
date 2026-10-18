@@ -1,0 +1,66 @@
+<%- include('partials/head', { title: 'Submit feedback' }) %>
+<%- include('partials/public-nav') %>
+
+<main id="main" class="container container--narrow page">
+    <div class="page-head">
+        <h1>Submit feedback</h1>
+        <p class="lede lede--sm">Tell us what happened or what you would like to see. The more specific you are, the easier it is to act on.</p>
+    </div>
+
+    <% if (error) { %>
+        <div class="alert alert--error" role="alert"><%- icon('alert', 18) %><span><%= error %></span></div>
+    <% } %>
+
+    <form class="card form" action="/feedback/submit" method="POST" data-validate>
+        <%- include('partials/csrf') %>
+
+        <label class="switch" for="is_anonymous">
+            <input type="checkbox" id="is_anonymous" name="is_anonymous" value="1" <%= values.is_anonymous ? 'checked' : '' %>>
+            <span class="switch__text">
+                <strong>Send anonymously</strong>
+                <small>Your name and email are not saved. You still get a reference code.</small>
+            </span>
+        </label>
+
+        <div class="field-row" id="identity">
+            <div class="field">
+                <label for="submitter_name">Your name <span class="optional">(optional)</span></label>
+                <input class="input" type="text" id="submitter_name" name="submitter_name" maxlength="150" autocomplete="name" value="<%= values.submitter_name %>">
+            </div>
+            <div class="field">
+                <label for="submitter_email">Your email <span class="optional">(optional)</span></label>
+                <input class="input" type="email" id="submitter_email" name="submitter_email" maxlength="150" autocomplete="email" value="<%= values.submitter_email %>">
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="category_id">Category</label>
+            <select class="input" id="category_id" name="category_id" required>
+                <option value="">Choose a category</option>
+                <% categories.forEach(category => { %>
+                    <option value="<%= category.id %>" <%= String(values.category_id) === String(category.id) ? 'selected' : '' %>><%= category.category_name %></option>
+                <% }) %>
+            </select>
+        </div>
+
+        <div class="field">
+            <label for="subject">Subject</label>
+            <input class="input" type="text" id="subject" name="subject" maxlength="<%= limits.subject %>" required value="<%= values.subject %>" data-count="subject-count">
+            <p class="hint"><span id="subject-count">0</span> / <%= limits.subject %></p>
+        </div>
+
+        <div class="field">
+            <label for="description">Details</label>
+            <textarea class="input" id="description" name="description" rows="7" maxlength="<%= limits.description %>" required data-count="description-count"><%= values.description %></textarea>
+            <p class="hint"><span id="description-count">0</span> / <%= limits.description %></p>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn--primary btn--lg">Submit feedback</button>
+            <a href="/" class="btn btn--ghost btn--lg">Cancel</a>
+        </div>
+    </form>
+</main>
+
+<%- include('partials/public-footer') %>
+<%- include('partials/foot') %>

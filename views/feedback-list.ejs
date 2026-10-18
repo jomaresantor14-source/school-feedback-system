@@ -1,0 +1,120 @@
+<%- include('partials/head', { title: pageTitle }) %>
+<%- include('partials/staff-open') %>
+
+<div class="page-head">
+    <h1><%= pageTitle %></h1>
+    <p class="muted"><%= intro %></p>
+</div>
+
+<%- include('partials/flash') %>
+
+<form class="filters card" action="<%= basePath %>" method="GET" role="search">
+    <div class="field field--grow">
+        <label for="q">Search</label>
+        <div class="input-icon">
+            <%- icon('search', 16) %>
+            <input class="input" type="search" id="q" name="q" value="<%= filters.q %>" placeholder="Subject, details, or reference code">
+        </div>
+    </div>
+
+    <div class="field">
+        <label for="status">Status</label>
+        <select class="input" id="status" name="status" data-autosubmit>
+            <option value="">All statuses</option>
+            <% statuses.forEach(s => { %><option value="<%= s.id %>" <%= filters.statusId === s.id ? 'selected' : '' %>><%= s.status_name %></option><% }) %>
+        </select>
+    </div>
+
+    <div class="field">
+        <label for="category">Category</label>
+        <select class="input" id="category" name="category" data-autosubmit>
+            <option value="">All categories</option>
+            <% categories.forEach(c => { %><option value="<%= c.id %>" <%= filters.categoryId === c.id ? 'selected' : '' %>><%= c.category_name %></option><% }) %>
+        </select>
+    </div>
+
+    <% if (showDepartmentFilter) { %>
+        <div class="field">
+            <label for="department">Department</label>
+            <select class="input" id="department" name="department" data-autosubmit>
+                <option value="">All departments</option>
+                <option value="unassigned" <%= filters.department === 'unassigned' ? 'selected' : '' %>>Not assigned</option>
+                <% departments.forEach(d => { %><option value="<%= d.id %>" <%= filters.department === d.id ? 'selected' : '' %>><%= d.department_name %></option><% }) %>
+            </select>
+        </div>
+    <% } %>
+
+    <div class="filters__actions">
+        <button type="submit" class="btn btn--primary">Apply</button>
+        <% if (filtersActive) { %><a class="btn btn--ghost" href="<%= basePath %>">Clear</a><% } %>
+    </div>
+</form>
+
+<p class="result-count"><%= total %> <%= total === 1 ? 'submission' : 'submissions' %><%= filtersActive ? ' match your filters' : '' %></p>
+
+<% if (rows.length === 0) { %>
+    <section class="card empty-card">
+        <% if (filtersActive) { %>
+            <h2>No submissions match those filters</h2>
+            <p class="muted">Try a different search or clear the filters.</p>
+            <a class="btn btn--primary" href="<%= basePath %>">Clear filters</a>
+        <% } else { %>
+            <h2>Nothing here yet</h2>
+            <p class="muted">
+                <% if (mode === 'department') { %>No feedback has been assigned to your department.<% } else { %>No feedback has been submitted yet.<% } %>
+            </p>
+        <% } %>
+    </section>
+<% } else { %>
+    <section class="card card--flush">
+        <div class="table-wrap">
+            <table class="table table--list">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Department</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% rows.forEach(item => { %>
+                        <tr>
+                            <td>
+                                <a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a>
+                                <span class="sub"><%= formatRef(item.reference_code) %><%= item.is_anonymous ? ', anonymous' : '' %></span>
+                            </td>
+                            <td><%= item.category_name %></td>
+                            <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
+                            <td>
+                                <% if (canAssign) { %>
+                                    <form class="assign" action="/feedback/view/<%= item.id %>/assign" method="POST">
+                                        <%- include('partials/csrf') %>
+                                        <input type="hidden" name="return_to" value="<%= currentUrl %>">
+                                        <label class="sr-only" for="dept-<%= item.id %>">Department for <%= item.subject %></label>
+                                        <select class="input input--sm" id="dept-<%= item.id %>" name="department_id" required>
+                                            <option value="">Not assigned</option>
+                                            <% departments.forEach(d => { %>
+                                                <option value="<%= d.id %>" <%= Number(item.assigned_department_id) === d.id ? 'selected' : '' %>><%= d.department_name %></option>
+                                            <% }) %>
+                                        </select>
+                                        <button type="submit" class="btn btn--ghost btn--sm">Assign</button>
+                                    </form>
+                                <% } else { %>
+                                    <%= item.department_name || 'Not assigned' %>
+                                <% } %>
+                            </td>
+                            <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <%- include('partials/pager') %>
+<% } %>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>

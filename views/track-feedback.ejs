@@ -1,0 +1,81 @@
+<%- include('partials/head', { title: 'Track a submission' }) %>
+<%- include('partials/public-nav') %>
+
+<main id="main" class="container container--narrow page">
+    <div class="page-head">
+        <h1>Track a submission</h1>
+        <p class="lede lede--sm">Enter the reference code you received after submitting. Dashes and letter case do not matter.</p>
+    </div>
+
+    <form class="card form form--inline" action="/feedback/track" method="GET">
+        <div class="field">
+            <label for="code">Reference code</label>
+            <input class="input input--code" type="text" id="code" name="code" value="<%= code %>" placeholder="9B5F-485A-7549-2EE0" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+        </div>
+        <button type="submit" class="btn btn--primary btn--lg">Check status</button>
+    </form>
+
+    <% if (searched && !feedback) { %>
+        <div class="alert alert--error" role="alert">
+            <%- icon('alert', 18) %>
+            <span>No submission matches that code. Check for a typo and try again.</span>
+        </div>
+    <% } %>
+
+    <% if (feedback) {
+        const currentIndex = steps.findIndex(step => step.id === feedback.status_id);
+    %>
+        <article class="card result">
+            <header class="result__head">
+                <div>
+                    <h2><%= feedback.subject %></h2>
+                    <p class="muted">Reference <%= formatRef(feedback.reference_code) %></p>
+                </div>
+                <%- include('partials/status-badge', { badgeStatus: feedback.status_name }) %>
+            </header>
+
+            <ol class="stepper" aria-label="Progress">
+                <% steps.forEach((step, index) => { %>
+                    <li class="<%= index < currentIndex ? 'is-done' : (index === currentIndex ? 'is-current' : '') %>"<%- index === currentIndex ? ' aria-current="step"' : '' %>>
+                        <span class="stepper__dot"></span>
+                        <span class="stepper__label"><%= step.status_name %></span>
+                    </li>
+                <% }) %>
+            </ol>
+
+            <dl class="facts">
+                <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
+                <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>
+                <div><dt>Handled by</dt><dd><%= feedback.department_name || 'Waiting to be assigned' %></dd></div>
+            </dl>
+
+            <h3>What you wrote</h3>
+            <p class="prose"><%= feedback.description %></p>
+
+            <h3>Updates</h3>
+            <ol class="timeline">
+                <% history.slice().reverse().forEach(item => {
+                    const isNote = item.old_status_id === item.new_status_id; %>
+                    <li class="timeline__item">
+                        <span class="timeline__dot timeline__dot--<%= statusClass(item.new_status) %>"></span>
+                        <div>
+                            <p class="timeline__title"><%= isNote ? 'Note from staff' : 'Status changed to ' + item.new_status %></p>
+                            <p class="timeline__meta"><%= fmtDate(item.changed_at) %></p>
+                            <% if (item.remarks) { %><p class="timeline__note"><%= item.remarks %></p><% } %>
+                        </div>
+                    </li>
+                <% }) %>
+                <li class="timeline__item">
+                    <span class="timeline__dot"></span>
+                    <div>
+                        <p class="timeline__title">Submission received</p>
+                        <p class="timeline__meta"><%= fmtDate(feedback.created_at) %></p>
+                    </div>
+                </li>
+            </ol>
+        </article>
+    <% } %>
+</main>
+
+<%- include('partials/public-footer') %>
+<%- include('partials/foot') %>

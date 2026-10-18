@@ -1,0 +1,40 @@
+<%
+    const role = user.role;
+    const deptStaff = DEPT_ROLES.includes(role);
+    const path = currentUrl.split('?')[0];
+    const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
+
+    if (role === 'admin') items.push({ href: '/feedback/admin', label: 'All feedback', icon: 'list' });
+    if (deptStaff) items.push({ href: '/feedback/department-inbox', label: 'Department inbox', icon: 'inbox' });
+    if (role === 'institutional_management') items.push({ href: '/feedback/management', label: 'School overview', icon: 'eye' });
+    if (role === 'admin' || role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
+    items.push({ href: '/feedback/my-submissions', label: 'My submissions', icon: 'user' });
+    items.push({ href: '/feedback/submit', label: 'Send feedback', icon: 'send' });
+    if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
+%>
+<div class="app">
+    <aside class="sidebar">
+        <a class="brand brand--light" href="/staff/dashboard"><%- include('brand') %></a>
+
+        <nav class="side-nav" aria-label="Staff">
+            <% items.forEach(item => { %>
+                <a href="<%= item.href %>"<%- path === item.href ? ' aria-current="page"' : '' %>>
+                    <%- icon(item.icon, 18) %><span><%= item.label %></span>
+                </a>
+            <% }) %>
+        </nav>
+
+        <div class="side-user">
+            <span class="avatar" aria-hidden="true"><%= initials(user.full_name) %></span>
+            <span class="side-user__text">
+                <strong><%= user.full_name %></strong>
+                <small><%= roleLabel(user.role) %></small>
+            </span>
+            <form action="/auth/logout" method="POST">
+                <%- include('csrf') %>
+                <button type="submit" class="icon-btn" title="Log out" aria-label="Log out"><%- icon('logout', 18) %></button>
+            </form>
+        </div>
+    </aside>
+
+    <main class="app-main" id="main">

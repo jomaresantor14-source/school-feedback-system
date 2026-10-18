@@ -1,0 +1,7 @@
+<% if (pages > 1) { %>
+    <nav class="pager" aria-label="Pages">
+        <% if (page > 1) { %><a class="btn btn--ghost btn--sm" href="<%= pageUrl(page - 1) %>">Previous</a><% } else { %><span></span><% } %>
+        <span class="pager__info">Page <%= page %> of <%= pages %></span>
+        <% if (page < pages) { %><a class="btn btn--ghost btn--sm" href="<%= pageUrl(page + 1) %>">Next</a><% } else { %><span></span><% } %>
+    </nav>
+<% } %>

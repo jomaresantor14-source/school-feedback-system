@@ -1,0 +1,84 @@
+<%- include('partials/head', { title: 'Staff accounts' }) %>
+<%- include('partials/staff-open') %>
+
+<div class="page-head">
+    <h1>Staff accounts</h1>
+    <p class="muted">Create accounts for staff and see who has access.</p>
+</div>
+
+<% if (error) { %>
+    <div class="alert alert--error" role="alert"><%- icon('alert', 18) %><span><%= error %></span></div>
+<% } %>
+<% if (success) { %>
+    <div class="alert alert--success" role="status"><%- icon('check', 18) %><span><%= success %></span></div>
+<% } %>
+
+<div class="detail detail--wide-side">
+    <section class="card card--flush">
+        <header class="card__head"><h2>Current accounts</h2></header>
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Name</th><th>Role</th><th>Department</th><th>Created</th></tr></thead>
+                <tbody>
+                    <% staff.forEach(person => { %>
+                        <tr>
+                            <td><strong><%= person.full_name %></strong><span class="sub"><%= person.email %></span></td>
+                            <td><%= roleLabel(person.role) %></td>
+                            <td><%= person.department_name || 'None' %></td>
+                            <td class="nowrap"><%= fmtDate(person.created_at, false) %></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2>New account</h2>
+        <form class="form" action="/auth/create-staff" method="POST">
+            <%- include('partials/csrf') %>
+
+            <div class="field">
+                <label for="full_name">Full name</label>
+                <input class="input" type="text" id="full_name" name="full_name" required maxlength="150" value="<%= values.full_name || '' %>">
+            </div>
+
+            <div class="field">
+                <label for="email">Email address</label>
+                <input class="input" type="email" id="email" name="email" required maxlength="150" value="<%= values.email || '' %>">
+            </div>
+
+            <div class="field">
+                <label for="password">Temporary password</label>
+                <input class="input" type="password" id="password" name="password" required minlength="12" autocomplete="new-password">
+                <p class="hint">At least 12 characters. Ask the person to keep it private.</p>
+            </div>
+
+            <div class="field">
+                <label for="role">Role</label>
+                <select class="input" id="role" name="role" required>
+                    <option value="">Choose a role</option>
+                    <% roles.forEach(r => { %>
+                        <option value="<%= r.value %>" <%= values.role === r.value ? 'selected' : '' %>><%= r.label %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="department_id">Department</label>
+                <select class="input" id="department_id" name="department_id">
+                    <option value="">No department</option>
+                    <% departments.forEach(d => { %>
+                        <option value="<%= d.id %>" <%= String(values.department_id) === String(d.id) ? 'selected' : '' %>><%= d.department_name %></option>
+                    <% }) %>
+                </select>
+                <p class="hint">Required for administrative staff, department heads, guidance staff and IT staff.</p>
+            </div>
+
+            <button type="submit" class="btn btn--primary btn--block">Create account</button>
+        </form>
+    </section>
+</div>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>

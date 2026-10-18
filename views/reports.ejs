@@ -1,0 +1,75 @@
+<%- include('partials/head', { title: 'Reports' }) %>
+<%- include('partials/staff-open') %>
+
+<div class="page-head">
+    <h1>Reports</h1>
+    <p class="muted"><%= scopeLabel %>. Figures update every time you open this page.</p>
+</div>
+
+<section class="stat-grid" aria-label="Totals">
+    <div class="stat"><span class="stat__num"><%= total %></span><span class="stat__label">Total submissions</span></div>
+    <div class="stat stat--pending"><span class="stat__num"><%= pending %></span><span class="stat__label">Pending</span></div>
+    <div class="stat stat--resolved"><span class="stat__num"><%= resolved %></span><span class="stat__label">Resolved</span></div>
+    <div class="stat"><span class="stat__num"><%= resolutionRate %>%</span><span class="stat__label">Resolution rate</span></div>
+</section>
+
+<div class="report-grid">
+    <section class="card">
+        <h2>By status</h2>
+        <% if (total === 0) { %>
+            <p class="empty">No submissions yet.</p>
+        <% } else { %>
+            <div class="stack-bar" role="img" aria-label="Share of submissions by status">
+                <% statuses.forEach(s => { if (s.total > 0) { %>
+                    <span class="stack-bar__seg stack-bar__seg--<%= statusClass(s.status_name) %>" style="flex: <%= s.total %>" title="<%= s.status_name %>: <%= s.total %>"></span>
+                <% } }) %>
+            </div>
+        <% } %>
+        <ul class="legend">
+            <% statuses.forEach(s => { %>
+                <li><span class="legend__dot legend__dot--<%= statusClass(s.status_name) %>"></span><%= s.status_name %><strong><%= s.total %></strong></li>
+            <% }) %>
+        </ul>
+        <p class="muted small">
+            <%= thisWeek %> new in the last 7 days<% if (showDepartments) { %>, <%= unassigned %> not assigned to a department<% } %>.
+        </p>
+    </section>
+
+    <section class="card">
+        <h2>Most common categories</h2>
+        <% const maxCat = Math.max(1, ...categories.map(c => c.total)); %>
+        <ul class="bars">
+            <% categories.forEach(c => { %>
+                <li>
+                    <span class="bars__label"><%= c.category_name %></span>
+                    <span class="bars__track"><span class="bars__fill" style="width: <%= Math.round((c.total / maxCat) * 100) %>%"></span></span>
+                    <strong class="bars__num"><%= c.total %></strong>
+                </li>
+            <% }) %>
+        </ul>
+    </section>
+</div>
+
+<% if (showDepartments) { %>
+    <section class="card card--flush">
+        <header class="card__head"><h2>By department</h2></header>
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Department</th><th class="num">Assigned</th><th class="num">Pending</th><th class="num">Resolved</th></tr></thead>
+                <tbody>
+                    <% departments.forEach(d => { %>
+                        <tr>
+                            <td><%= d.department_name %></td>
+                            <td class="num"><%= d.total %></td>
+                            <td class="num"><%= d.pending %></td>
+                            <td class="num"><%= d.resolved %></td>
+                        </tr>
+                    <% }) %>
+                </tbody>
+            </table>
+        </div>
+    </section>
+<% } %>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>
