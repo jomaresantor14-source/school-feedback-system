@@ -19,7 +19,7 @@
 
     <div class="field">
         <label for="status">Status</label>
-        <select class="input" id="status" name="status" data-autosubmit>
+        <select class="input" id="status" name="status">
             <option value="">All statuses</option>
             <% statuses.forEach(s => { %><option value="<%= s.id %>" <%= Number(filters.statusId) === Number(s.id) ? 'selected' : '' %>><%= s.status_name %></option><% }) %>
         </select>
@@ -27,7 +27,7 @@
 
     <div class="field">
         <label for="category">Category</label>
-        <select class="input" id="category" name="category" data-autosubmit>
+        <select class="input" id="category" name="category">
             <option value="">All categories</option>
             <% categories.forEach(c => { %><option value="<%= c.id %>" <%= Number(filters.categoryId) === Number(c.id) ? 'selected' : '' %>><%= c.category_name %></option><% }) %>
         </select>
@@ -36,7 +36,7 @@
     <% if (locals.showFeedbackTypeFilter) { %>
         <div class="field">
             <label for="feedback_type">Type</label>
-            <select class="input" id="feedback_type" name="feedback_type" data-autosubmit>
+            <select class="input" id="feedback_type" name="feedback_type">
                 <option value="">All types</option>
                 <% ['Feedback', 'Concern', 'Suggestion'].forEach(type => { %>
                     <option value="<%= type %>" <%= filters.feedbackType === type ? 'selected' : '' %>><%= type %></option>
@@ -59,7 +59,7 @@
     <% if (showDepartmentFilter) { %>
         <div class="field">
             <label for="department">Department</label>
-            <select class="input" id="department" name="department" data-autosubmit>
+            <select class="input" id="department" name="department">
                 <option value="">All departments</option>
                 <option value="unassigned" <%= filters.department === 'unassigned' ? 'selected' : '' %>>Not assigned</option>
                 <% departments.forEach(d => { %><option value="<%= d.id %>" <%= filters.department === d.id ? 'selected' : '' %>><%= d.department_name %></option><% }) %>
@@ -83,9 +83,13 @@
             <a class="btn btn--primary" href="<%= basePath %>">Clear filters</a>
         <% } else { %>
             <h2>Nothing here yet</h2>
-            <p class="muted">
-                <% if (mode === 'department') { %>No feedback has been assigned to your department.<% } else { %>No feedback has been submitted yet.<% } %>
-            </p>
+            <% if (basePath === '/feedback/assign') { %>
+                <p class="muted">There are no unassigned submissions matching this status. To review or reassign an existing assignment, open <a href="/feedback/admin">All Feedback</a>.</p>
+            <% } else { %>
+                <p class="muted">
+                    <% if (mode === 'department') { %>No feedback has been assigned to your department.<% } else { %>No feedback has been submitted yet.<% } %>
+                </p>
+            <% } %>
         <% } %>
     </section>
 <% } else { %>
