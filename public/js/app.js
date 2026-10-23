@@ -80,8 +80,17 @@
 
     // Stop double submissions
     document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(function (form) {
-        form.addEventListener('submit', function () {
+        form.addEventListener('submit', function (event) {
             if (form.dataset.submitted === '1') return;
+            var submitter = document.activeElement;
+            var confirmMessage = submitter && submitter.form === form
+                ? submitter.getAttribute('data-confirm')
+                : null;
+            confirmMessage = confirmMessage || form.getAttribute('data-confirm');
+            if (confirmMessage && !window.confirm(confirmMessage)) {
+                event.preventDefault();
+                return;
+            }
             form.dataset.submitted = '1';
 
             setTimeout(function () {

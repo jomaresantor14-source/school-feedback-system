@@ -105,6 +105,7 @@ CREATE TABLE `feedback_assignment_history` (
   `changed_by` int(11) DEFAULT NULL,
   `old_department_id` int(11) DEFAULT NULL,
   `new_department_id` int(11) NOT NULL,
+  `remarks` text DEFAULT NULL,
   `changed_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -153,7 +154,8 @@ INSERT INTO `statuses` (`id`, `status_name`) VALUES
 (4, 'Resolved'),
 (2, 'Under Review'),
 (5, 'Assigned'),
-(6, 'Awaiting Admin Review');
+(6, 'Awaiting Admin Review'),
+(7, 'Returned for Further Action');
 
 -- --------------------------------------------------------
 
@@ -280,7 +282,7 @@ ALTER TABLE `feedback_history`
 -- AUTO_INCREMENT for table `statuses`
 --
 ALTER TABLE `statuses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `users`

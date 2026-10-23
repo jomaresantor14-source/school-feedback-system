@@ -33,7 +33,7 @@
         </select>
     </div>
 
-    <% if (showFeedbackTypeFilter) { %>
+    <% if (locals.showFeedbackTypeFilter) { %>
         <div class="field">
             <label for="feedback_type">Type</label>
             <select class="input" id="feedback_type" name="feedback_type" data-autosubmit>
@@ -42,6 +42,17 @@
                     <option value="<%= type %>" <%= filters.feedbackType === type ? 'selected' : '' %>><%= type %></option>
                 <% }) %>
             </select>
+        </div>
+    <% } %>
+
+    <% if (locals.showDateFilter) { %>
+        <div class="field">
+            <label for="date_from">Submitted from</label>
+            <input class="input" type="date" id="date_from" name="date_from" value="<%= filters.dateFrom %>">
+        </div>
+        <div class="field">
+            <label for="date_to">Submitted to</label>
+            <input class="input" type="date" id="date_to" name="date_to" value="<%= filters.dateTo %>">
         </div>
     <% } %>
 
@@ -90,7 +101,8 @@
                         <th>Status</th>
                         <th>Department</th>
                         <th><%= filters.statusName === 'Awaiting Admin Review' ? 'Date forwarded' : 'Submitted' %></th>
-                        <% if (mode === 'department') { %><th>Last updated</th><th><%= filters.statusName === 'Awaiting Admin Review' ? 'Department action' : 'Department note' %></th><% } %>
+                        <% if (mode === 'department') { %><th>Assigned</th><th>Last updated</th><th><%= filters.statusName === 'Awaiting Admin Review' ? 'Department action report' : 'Department note' %></th><% } %>
+                        <% if (locals.showActionReport) { %><th>Last updated</th><th>Department action report</th><% } %>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -111,7 +123,7 @@
                             <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
                             <td>
                                 <% if (canAssign) { %>
-                                    <form class="assign" action="/feedback/view/<%= item.id %>/assign" method="POST">
+                                    <form class="assign" action="/feedback/view/<%= item.id %>/assign" method="POST" data-confirm="Assign this submission to the selected department?">
                                         <%- include('partials/csrf') %>
                                         <input type="hidden" name="return_to" value="<%= currentUrl %>">
                                         <label class="sr-only" for="dept-<%= item.id %>">Department for <%= item.subject %></label>
@@ -121,6 +133,8 @@
                                                 <option value="<%= d.id %>" <%= Number(item.assigned_department_id) === d.id ? 'selected' : '' %>><%= d.department_name %></option>
                                             <% }) %>
                                         </select>
+                                        <label class="sr-only" for="assignment-note-<%= item.id %>">Optional assignment remarks for <%= item.subject %></label>
+                                        <input class="input input--sm" id="assignment-note-<%= item.id %>" name="assignment_remarks" maxlength="1000" placeholder="Optional assignment note">
                                         <button type="submit" class="btn btn--ghost btn--sm">Assign</button>
                                     </form>
                                 <% } else { %>
@@ -129,8 +143,13 @@
                             </td>
                             <td class="nowrap"><%= fmtDate(filters.statusName === 'Awaiting Admin Review' ? (item.date_forwarded || item.created_at) : item.created_at, false) %></td>
                             <% if (mode === 'department') { %>
+                                <td class="nowrap"><%= item.assigned_at ? fmtDate(item.assigned_at, false) : '—' %></td>
                                 <td class="nowrap"><%= fmtDate(item.last_updated_at || item.created_at, false) %></td>
                                 <td><%= item.latest_remarks || '—' %></td>
+                            <% } %>
+                            <% if (locals.showActionReport) { %>
+                                <td class="nowrap"><%= fmtDate(item.date_forwarded || item.created_at, false) %></td>
+                                <td><%= item.latest_remarks || 'No department action report was recorded.' %></td>
                             <% } %>
                             <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
                         </tr>

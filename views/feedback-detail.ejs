@@ -49,9 +49,9 @@
             </dl>
         </section>
 
-        <% if (canUpdate) { %>
+        <% if (canUpdate && user.role !== 'admin' && feedback.status_name !== 'Awaiting Admin Review') { %>
             <section class="card">
-                <h2>Update status</h2>
+                <h2>Department progress</h2>
                 <form class="form" action="/feedback/view/<%= feedback.id %>/status" method="POST">
                     <%- include('partials/csrf') %>
                     <div class="field">
@@ -69,11 +69,10 @@
                                     ];
                                 } else if (!isAdmin) {
                                     const transitions = {
-                                        Pending: ['Under Review'],
                                         Assigned: ['Under Review'],
                                         'Under Review': ['Under Review', 'In Progress'],
-                                        'In Progress': ['In Progress', 'Awaiting Admin Review'],
-                                        'Awaiting Admin Review': ['Awaiting Admin Review']
+                                        'In Progress': ['In Progress'],
+                                        'Returned for Further Action': ['Returned for Further Action', 'Under Review']
                                     };
                                     allowedStatusNames = transitions[feedback.status_name] || [];
                                     if (!allowedStatusNames.includes(feedback.status_name)) {
@@ -94,11 +93,42 @@
                         </select>
                     </div>
                     <div class="field">
-                        <label for="remarks"><%= user.role === 'admin' && feedback.status_name === 'Awaiting Admin Review' ? 'Administrator response / return note' : 'Department action or note' %> <span class="optional">(optional unless submitting for review or approval)</span></label>
-                        <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="What changed, or what is being done?"<%= (user.role === 'admin' && feedback.status_name === 'Awaiting Admin Review') || (!isAdmin && feedback.status_name === 'In Progress') ? ' required' : '' %>></textarea>
-                        <p class="hint">Internal notes are visible only to authorized staff. Only the administrator's final resolution response is shown on the public tracking page.</p>
+                        <label for="remarks">Internal department note <span class="optional">(optional)</span></label>
+                        <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="Add an internal progress note."></textarea>
+                        <p class="hint">Internal notes are visible only to authorized staff.</p>
                     </div>
-                    <button type="submit" class="btn btn--primary btn--block">Save</button>
+                    <button type="submit" class="btn btn--primary btn--block" data-loading-text="Saving...">Save progress</button>
+                </form>
+            </section>
+        <% } %>
+
+        <% if (canUpdate && user.role !== 'admin' && feedback.status_name === 'In Progress') { %>
+            <section class="card">
+                <h2>Submit action report</h2>
+                <p class="muted">Describe the action taken and findings. Once submitted, the report is locked until Admin review.</p>
+                <form class="form" action="/feedback/view/<%= feedback.id %>/report" method="POST" data-confirm="Submit this action report to the Admin? You cannot edit it until it is returned.">
+                    <%- include('partials/csrf') %>
+                    <div class="field">
+                        <label for="report-remarks">Action taken and findings</label>
+                        <textarea class="input" id="report-remarks" name="remarks" rows="5" maxlength="1000" required placeholder="Summarize the actions taken and the outcome."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--block" data-loading-text="Submitting report...">Submit to Admin</button>
+                </form>
+            </section>
+        <% } %>
+
+        <% if (user.role === 'admin' && feedback.status_name === 'Awaiting Admin Review') { %>
+            <section class="card">
+                <h2>Review department report</h2>
+                <p class="muted">Approve the reported resolution or return it to the department with instructions.</p>
+                <form class="form" action="/feedback/view/<%= feedback.id %>/review" method="POST" data-confirm="Approve this report and mark the feedback Resolved?">
+                    <%- include('partials/csrf') %>
+                    <div class="field">
+                        <label for="review-remarks">Administrator review remarks / final response</label>
+                        <textarea class="input" id="review-remarks" name="remarks" rows="5" maxlength="1000" required placeholder="Provide a final response or explain what further action is required."></textarea>
+                    </div>
+                    <button type="submit" name="decision" value="resolve" class="btn btn--primary btn--block" data-loading-text="Approving...">Approve &amp; Resolve</button>
+                    <button type="submit" name="decision" value="return" class="btn btn--ghost btn--block" formnovalidate data-confirm="Return this report to the department for further action?" data-loading-text="Returning...">Return for Further Action</button>
                 </form>
             </section>
         <% } %>
@@ -106,7 +136,7 @@
         <% if (canAssign) { %>
             <section class="card">
                 <h2>Assign department</h2>
-                <form class="form" action="/feedback/view/<%= feedback.id %>/assign" method="POST">
+                <form class="form" action="/feedback/view/<%= feedback.id %>/assign" method="POST" data-confirm="Assign this submission to the selected department?">
                     <%- include('partials/csrf') %>
                     <div class="field">
                         <label for="department_id">Department</label>
@@ -117,7 +147,11 @@
                             <% }) %>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn--ghost btn--block">Assign</button>
+                    <div class="field">
+                        <label for="assignment_remarks">Assignment remarks <span class="optional">(optional, staff-only)</span></label>
+                        <textarea class="input" id="assignment_remarks" name="assignment_remarks" rows="3" maxlength="1000" placeholder="Add routing instructions for the department."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn--ghost btn--block" data-loading-text="Assigning...">Assign</button>
                 </form>
             </section>
         <% } %>

@@ -13,6 +13,7 @@
 
     <form class="card form" action="/feedback/submit" method="POST" data-validate>
         <%- include('partials/csrf') %>
+        <%- include('partials/csrf') %>
 
         <label class="switch" for="is_anonymous">
             <input type="checkbox" id="is_anonymous" name="is_anonymous" value="1" <%= values.is_anonymous ? 'checked' : '' %>>

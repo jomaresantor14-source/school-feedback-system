@@ -9,11 +9,11 @@
 
     if (role === 'admin') {
         items.push(
-            { href: '/feedback/admin?status_name=Pending', label: 'New / Pending Feedback', icon: 'inbox', statusName: 'Pending' },
-            { href: '/feedback/admin?department=unassigned', label: 'Unassigned Feedback', icon: 'list', unassigned: true },
-            { href: '/feedback/admin?status_name=Assigned', label: 'Assign to Department', icon: 'users', statusName: 'Assigned' },
-            { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Awaiting Admin Review', icon: 'eye', statusName: 'Awaiting Admin Review' },
-            { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Approve Resolution', icon: 'check', statusName: 'Awaiting Admin Review' }
+            { href: '/feedback/pending', label: 'Pending Feedback', icon: 'inbox', route: '/feedback/pending' },
+            { href: '/feedback/unassigned', label: 'Unassigned', icon: 'list', route: '/feedback/unassigned' },
+            { href: '/feedback/assign', label: 'Assign Feedback', icon: 'users', route: '/feedback/assign' },
+            { href: '/feedback/review', label: 'Admin Review', icon: 'eye', route: '/feedback/review' },
+            { href: '/feedback/resolutions', label: 'Resolutions', icon: 'check', route: '/feedback/resolutions' }
         );
     }
     if (role === 'faculty') {
@@ -49,7 +49,9 @@
             <% items.forEach(item => {
                 const current = item.unassigned
                     ? path.startsWith('/feedback/admin') && onUnassigned
-                    : item.statusName
+                        : item.route
+                            ? path === item.route
+                            : item.statusName
                         ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
                     : item.inbox
                         ? path === item.href && !query.has('status_name') && !feedbackType
