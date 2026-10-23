@@ -86,6 +86,10 @@
 
             setTimeout(function () {
                 form.querySelectorAll('button[type="submit"]').forEach(function (button) {
+                    if (button.dataset.loadingText) {
+                        button.dataset.originalText = button.textContent;
+                        button.textContent = button.dataset.loadingText;
+                    }
                     button.disabled = true;
                 });
             }, 0);
@@ -99,6 +103,10 @@
             delete form.dataset.submitted;
             form.querySelectorAll('button[type="submit"]').forEach(function (button) {
                 button.disabled = false;
+                if (button.dataset.originalText) {
+                    button.textContent = button.dataset.originalText;
+                    delete button.dataset.originalText;
+                }
             });
         });
     });

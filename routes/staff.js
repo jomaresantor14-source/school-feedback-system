@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
 const router = express.Router();
 
 const db = require('../config/db');
@@ -193,15 +194,22 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     });
 });
 
-router.get('/profile', requireRole('faculty'), async (req, res) => {
+async function loadFacultyProfile(userId) {
     const [[profile]] = await db.query(
-        `SELECT u.full_name, u.email, u.role, d.department_name
+        `SELECT u.full_name, u.email, u.role, u.department_id, u.created_at,
+                d.department_name
          FROM users u
          LEFT JOIN departments d ON d.id = u.department_id
          WHERE u.id = ?
          LIMIT 1`,
-        [req.session.user.id]
+        [userId]
     );
+
+    return profile;
+}
+
+async function renderFacultyProfile(req, res, { editMode = false, error = null, values = {} } = {}, status = 200) {
+    const profile = await loadFacultyProfile(req.session.user.id);
 
     if (!profile) {
         return res.status(404).render('error', {
@@ -211,7 +219,121 @@ router.get('/profile', requireRole('faculty'), async (req, res) => {
         });
     }
 
-    res.render('staff-profile', { profile });
+    if (profile.role !== 'faculty') {
+        return res.status(403).render('error', {
+            code: 403,
+            title: 'Access denied',
+            message: 'This profile page is available to faculty accounts only.'
+        });
+    }
+
+    req.session.user = {
+        ...req.session.user,
+        full_name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        department_id: profile.department_id
+    };
+    res.locals.user = req.session.user;
+
+    return res.status(status).render('staff-profile', {
+        profile,
+        editMode,
+        error,
+        values: { full_name: profile.full_name, ...values }
+    });
+}
+
+router.get('/profile', requireRole('faculty'), async (req, res) => {
+    await renderFacultyProfile(req, res, {
+        editMode: req.query.edit === '1'
+    });
+});
+
+router.post('/profile', requireRole('faculty'), async (req, res) => {
+    const fullName = String((req.body && req.body.full_name) || '').trim();
+
+    if (!fullName || fullName.length > 150) {
+        return renderFacultyProfile(req, res, {
+            editMode: true,
+            error: 'Enter your name using no more than 150 characters.',
+            values: { full_name: fullName }
+        }, 400);
+    }
+
+    const [result] = await db.query(
+        'UPDATE users SET full_name = ? WHERE id = ? AND role = ?',
+        [fullName, req.session.user.id, 'faculty']
+    );
+
+    if (result.affectedRows !== 1) {
+        const [[account]] = await db.query(
+            'SELECT full_name FROM users WHERE id = ? AND role = ? LIMIT 1',
+            [req.session.user.id, 'faculty']
+        );
+        if (!account || account.full_name !== fullName) {
+            return res.status(404).render('error', {
+                code: 404,
+                title: 'Profile not found',
+                message: 'Your faculty account could not be updated. Please sign in again or contact an administrator.'
+            });
+        }
+    }
+
+    req.session.user.full_name = fullName;
+    req.session.flash = { type: 'success', message: 'Your profile name was updated.' };
+    return res.redirect('/staff/profile');
+});
+
+router.post('/profile/password', requireRole('faculty'), async (req, res) => {
+    const currentPassword = String((req.body && req.body.current_password) || '');
+    const newPassword = String((req.body && req.body.new_password) || '');
+    const confirmPassword = String((req.body && req.body.confirm_password) || '');
+
+    const showPasswordError = (message, status = 400) =>
+        renderFacultyProfile(req, res, { error: message }, status);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        return showPasswordError('Complete all password fields.');
+    }
+
+    if (newPassword.length < 12) {
+        return showPasswordError('Your new password must contain at least 12 characters.');
+    }
+
+    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+        return showPasswordError('Your new password must be no longer than 72 bytes.');
+    }
+
+    if (newPassword !== confirmPassword) {
+        return showPasswordError('The new password and confirmation do not match.');
+    }
+
+    const [[account]] = await db.query(
+        'SELECT password_hash FROM users WHERE id = ? AND role = ? LIMIT 1',
+        [req.session.user.id, 'faculty']
+    );
+
+    if (!account) {
+        return res.status(404).render('error', {
+            code: 404,
+            title: 'Account not found',
+            message: 'Your faculty account could not be found. Please sign in again or contact an administrator.'
+        });
+    }
+
+    if (!(await bcrypt.compare(currentPassword, account.password_hash))) {
+        return showPasswordError('Your current password is incorrect.', 400);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db.query(
+        'UPDATE users SET password_hash = ? WHERE id = ? AND role = ?',
+        [passwordHash, req.session.user.id, 'faculty']
+    );
+
+    req.session.flash = { type: 'success', message: 'Your password was changed successfully.' };
+    return res.redirect('/staff/profile');
 });
 
 router.get('/reports', requireRole(...REPORT_ROLES), async (req, res) => {
