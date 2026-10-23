@@ -46,6 +46,10 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     }
 
     const me = accounts[0];
+    const departmentWorkflowShortcuts =
+        (me.role === 'guidance_staff' && me.department_name === 'Guidance Office') ||
+        (me.role === 'it_staff' && me.department_name === 'IT Department') ||
+        (me.role === 'department_head' && me.department_name === 'Facilities Department');
 
     // Keep the session in step with the database (role or department changes).
     req.session.user = {
@@ -201,6 +205,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         me: { ...me, department_name: me.department_name },
         scopeLabel: scope.label,
         departmentDashboard: DEPT_ROLES.includes(me.role),
+        departmentWorkflowShortcuts,
         departmentFeedback,
         departmentPageUrl,
         facultyConcerns: facultyConcerns.rows,

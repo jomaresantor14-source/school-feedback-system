@@ -304,6 +304,32 @@
         </div>
     </section>
 
+    <% if (departmentWorkflowShortcuts) { %>
+        <section class="card" aria-labelledby="department-workflow-title">
+            <header class="card__head">
+                <h2 id="department-workflow-title">Department workflow</h2>
+                <a href="/feedback/department-inbox">Open full inbox</a>
+            </header>
+            <p class="muted">Open the correct queue to review assigned feedback and continue department actions.</p>
+            <div class="filters__actions">
+                <a class="btn btn--ghost" href="/feedback/department-inbox">
+                    Inbox <span class="badge"><%= cards.pendingAssigned %></span>
+                </a>
+                <a class="btn btn--ghost" href="/feedback/department-inbox?status_name=Under+Review">
+                    Under Review <span class="badge"><%= cards.underReview %></span>
+                </a>
+                <a class="btn btn--ghost" href="/feedback/department-inbox?status_name=In+Progress">
+                    In Progress <span class="badge"><%= cards.inProgress %></span>
+                </a>
+                <a class="btn btn--ghost" href="/feedback/department-inbox?status_name=Awaiting+Admin+Review">
+                    Submit for Final Review <span class="badge"><%= cards.awaitingAdminReview %></span>
+                </a>
+                <a class="btn btn--ghost" href="/feedback/department-history">Department History</a>
+                <a class="btn btn--ghost" href="/staff/reports">Department Reports</a>
+            </div>
+        </section>
+    <% } %>
+
     <section class="card card--flush">
         <header class="card__head">
             <h2>Feedback for <%= me.department_name || 'your department' %></h2>
