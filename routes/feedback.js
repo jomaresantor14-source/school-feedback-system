@@ -5,7 +5,7 @@ const router = express.Router();
 const db = require('../config/db');
 const { requireLogin, requireRole } = require('../middleware/auth');
 const { DEPT_ROLES, FEEDBACK_TYPES } = require('../lib/constants');
-const { normalizeRef, parseId, safeReturn } = require('../lib/helpers');
+const { normalizeRef, parseId, safeReturn, roleLabel } = require('../lib/helpers');
 const { parseFilters, listFeedback, lookups } = require('../lib/feedbackQueries');
 
 const SUBJECT_MAX = 200;
@@ -13,6 +13,36 @@ const DESCRIPTION_MAX = 5000;
 const REMARKS_MAX = 1000;
 
 const MANAGE_ROLES = ['admin', 'institutional_management', ...DEPT_ROLES];
+const TRACKING_STEPS = ['Received', 'Under review', 'In progress', 'Resolved'];
+
+function trackingStepIndex(statusName) {
+    switch (statusName) {
+        case 'Pending':
+        case 'Assigned':
+            return 0;
+        case 'Under Review':
+            return 1;
+        case 'In Progress':
+        case 'Awaiting Admin Review':
+        case 'Returned for Further Action':
+            return 2;
+        case 'Resolved':
+            return 3;
+        default:
+            return 2;
+    }
+}
+
+function formatElapsed(milliseconds) {
+    const minutes = Math.max(0, Math.floor(milliseconds / 60000));
+    if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
 
 function notFound(res, message = 'That feedback record could not be found.') {
     return res.status(404).render('error', {
@@ -208,8 +238,11 @@ router.get('/track', async (req, res) => {
             code: '',
             searched: false,
             feedback: null,
-            history: [],
-            steps: []
+            updates: [],
+            steps: TRACKING_STEPS,
+            currentStepIndex: 0,
+            response: null,
+            resolvedIn: null
         });
     }
 
@@ -222,7 +255,11 @@ router.get('/track', async (req, res) => {
             f.description,
             f.feedback_type,
             f.created_at,
-            f.status_id,
+            GREATEST(
+                f.created_at,
+                COALESCE((SELECT MAX(fh.changed_at) FROM feedback_history fh WHERE fh.feedback_id = f.id), f.created_at),
+                COALESCE((SELECT MAX(ah.changed_at) FROM feedback_assignment_history ah WHERE ah.feedback_id = f.id), f.created_at)
+            ) AS last_updated_at,
             c.category_name,
             s.status_name,
             d.department_name
@@ -240,70 +277,90 @@ router.get('/track', async (req, res) => {
             code: raw,
             searched: true,
             feedback: null,
-            history: [],
-            steps: []
+            updates: [],
+            steps: TRACKING_STEPS,
+            currentStepIndex: 0,
+            response: null,
+            resolvedIn: null
         });
     }
 
     const feedback = results[0];
 
-    const [[history], [steps]] = await Promise.all([
-        db.query(
-            `SELECT
-                fh.id,
-                fh.old_status_id,
-                fh.new_status_id,
-                CASE
-                    WHEN f.status_id = fh.new_status_id
-                         AND ns.status_name = 'Resolved'
-                         AND changed_by.role = 'admin'
-                    THEN fh.remarks
-                    ELSE NULL
-                END AS remarks,
+    const [history] = await db.query(
+        `SELECT
+                CASE WHEN fh.visible_to_submitter = 1 THEN fh.remarks ELSE NULL END AS public_remarks,
                 fh.changed_at,
+                os.status_name AS old_status,
+                changed_by.role AS actor_role,
                 ns.status_name AS new_status
              FROM feedback_history fh
+             LEFT JOIN statuses os ON os.id = fh.old_status_id
              JOIN statuses ns ON fh.new_status_id = ns.id
              JOIN feedback f ON fh.feedback_id = f.id
              LEFT JOIN users changed_by ON changed_by.id = fh.changed_by
              WHERE f.reference_code = ?
                AND (
                    fh.old_status_id IS NULL OR fh.old_status_id <> fh.new_status_id OR
-                   (
-                       f.status_id = fh.new_status_id
-                       AND ns.status_name = 'Resolved'
-                       AND changed_by.role = 'admin'
-                       AND fh.remarks IS NOT NULL
-                   )
+                   (fh.visible_to_submitter = 1 AND fh.remarks IS NOT NULL AND TRIM(fh.remarks) != '')
                )
              ORDER BY fh.changed_at ASC, fh.id ASC`,
-            [code]
-        ),
-        db.query('SELECT id, status_name FROM statuses ORDER BY id ASC')
-    ]);
+        [code]
+    );
 
-    const statusOrder = [
-        'Pending',
-        'Assigned',
-        'Under Review',
-        'In Progress',
-        'Awaiting Admin Review',
-        'Returned for Further Action',
-        'Resolved'
-    ];
-    steps.sort((a, b) => {
-        const aIndex = statusOrder.indexOf(a.status_name);
-        const bIndex = statusOrder.indexOf(b.status_name);
-        return (aIndex < 0 ? statusOrder.length : aIndex) -
-            (bIndex < 0 ? statusOrder.length : bIndex);
+    const updates = [{
+        changed_at: feedback.created_at,
+        type: 'status',
+        label: TRACKING_STEPS[0],
+        status_name: 'Pending'
+    }];
+    const publicResponses = [];
+    let previousStepIndex = trackingStepIndex(history[0] && history[0].old_status || 'Pending');
+
+    history.forEach(item => {
+        if (item.old_status && item.old_status !== item.new_status) {
+            const nextStepIndex = trackingStepIndex(item.new_status);
+            if (nextStepIndex !== previousStepIndex) {
+                updates.push({
+                    changed_at: item.changed_at,
+                    type: 'status',
+                    label: TRACKING_STEPS[nextStepIndex],
+                    status_name: item.new_status
+                });
+            }
+            previousStepIndex = nextStepIndex;
+        }
+
+        if (item.public_remarks && item.public_remarks.trim()) {
+            updates.push({
+                changed_at: item.changed_at,
+                type: 'note',
+                label: 'Public note',
+                remarks: item.public_remarks,
+                status_name: item.new_status
+            });
+            publicResponses.push({
+                message: item.public_remarks,
+                changed_at: item.changed_at,
+                sender_role: item.actor_role ? roleLabel(item.actor_role).toLowerCase() : 'staff member'
+            });
+        }
     });
+
+    const resolvedEvent = history.find(item => item.new_status === 'Resolved');
+    const resolvedIn = feedback.status_name === 'Resolved' && resolvedEvent
+        ? formatElapsed(new Date(resolvedEvent.changed_at) - new Date(feedback.created_at))
+        : null;
 
     res.render('track-feedback', {
         code: raw,
         searched: true,
         feedback,
-        history,
-        steps
+        updates,
+        steps: TRACKING_STEPS,
+        currentStepIndex: trackingStepIndex(feedback.status_name),
+        response: publicResponses.length ? publicResponses[publicResponses.length - 1] : null,
+        resolvedIn
     });
 });
 
@@ -624,6 +681,7 @@ router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) =
                     fh.feedback_id,
                     fh.changed_at,
                     fh.remarks,
+                    fh.visible_to_submitter,
                     os.status_name AS old_status,
                     ns.status_name AS new_status,
                     u.full_name AS changed_by,
@@ -674,7 +732,8 @@ router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) =
                     ? `${event.old_status} → ${event.new_status}`
                     : `Submitted as ${event.new_status}`,
                 by: event.changed_by || 'System',
-                remarks: event.remarks
+                remarks: event.remarks,
+                visible_to_submitter: Number(event.visible_to_submitter) === 1
             });
         });
         assignmentEvents.forEach(event => {
@@ -685,7 +744,8 @@ router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) =
                     ? `Reassigned from ${event.old_department} to ${event.new_department}`
                     : `Assigned to ${event.new_department}`,
                 by: event.changed_by || 'Administrator',
-                remarks: event.remarks
+                remarks: event.remarks,
+                visible_to_submitter: false
             });
         });
         historyByFeedback.forEach(events =>
@@ -785,6 +845,7 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
                 fh.old_status_id,
                 fh.new_status_id,
                 fh.remarks,
+                fh.visible_to_submitter,
                 fh.changed_at,
                 os.status_name AS old_status,
                 ns.status_name AS new_status,
@@ -850,7 +911,8 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
                 : `${item.old_status || 'New'} → ${item.new_status}`,
             by: item.changed_by || 'Staff member',
             remarks: item.remarks,
-            status: item.new_status
+            status: item.new_status,
+            visible_to_submitter: Number(item.visible_to_submitter) === 1
         });
     });
 
@@ -906,6 +968,9 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
     const body = req.body || {};
     const newStatusId = parseId(body.status_id);
     const remarks = String(body.remarks || '').trim().slice(0, REMARKS_MAX) || null;
+    const visibleToSubmitter = String(body.visibility_option_present || '') === '1'
+        ? String(body.visible_to_submitter || '') === '1'
+        : true;
     const detailUrl = `/feedback/view/${id}`;
 
     if (!newStatusId) {
@@ -991,9 +1056,9 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
 
         await conn.query(
             `INSERT INTO feedback_history
-                (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
-            [id, user.id, oldStatusId, newStatusId, remarks]
+                (feedback_id, changed_by, old_status_id, new_status_id, remarks, visible_to_submitter)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, user.id, oldStatusId, newStatusId, remarks, visibleToSubmitter ? 1 : 0]
         );
 
         return {
@@ -1070,8 +1135,8 @@ router.post('/view/:id/report', requireRole(...DEPT_ROLES), async (req, res) => 
         await conn.query('UPDATE feedback SET status_id = ? WHERE id = ?', [status.id, id]);
         await conn.query(
             `INSERT INTO feedback_history
-                (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
+                (feedback_id, changed_by, old_status_id, new_status_id, remarks, visible_to_submitter)
+             VALUES (?, ?, ?, ?, ?, 0)`,
             [id, user.id, rows[0].status_id, status.id, remarks]
         );
         return { type: 'submitted' };
@@ -1131,9 +1196,9 @@ router.post('/view/:id/review', requireRole('admin'), async (req, res) => {
         await conn.query('UPDATE feedback SET status_id = ? WHERE id = ?', [targetStatus.id, id]);
         await conn.query(
             `INSERT INTO feedback_history
-                (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
-            [id, user.id, rows[0].status_id, targetStatus.id, remarks]
+                (feedback_id, changed_by, old_status_id, new_status_id, remarks, visible_to_submitter)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, user.id, rows[0].status_id, targetStatus.id, remarks, decision === 'resolve' ? 1 : 0]
         );
         return { type: decision };
     });
@@ -1237,8 +1302,8 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         if (isPending) {
             await conn.query(
                 `INSERT INTO feedback_history
-                    (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-                 VALUES (?, ?, ?, ?, ?)`,
+                    (feedback_id, changed_by, old_status_id, new_status_id, remarks, visible_to_submitter)
+                 VALUES (?, ?, ?, ?, ?, 0)`,
                 [
                     id,
                     user.id,

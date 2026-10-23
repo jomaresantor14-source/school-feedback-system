@@ -126,6 +126,7 @@ CREATE TABLE `feedback_history` (
   `old_status_id` int(11) DEFAULT NULL,
   `new_status_id` int(11) NOT NULL,
   `remarks` text DEFAULT NULL,
+  `visible_to_submitter` tinyint(1) NOT NULL DEFAULT 1,
   `changed_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

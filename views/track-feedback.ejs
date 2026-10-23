@@ -1,7 +1,7 @@
 <%- include('partials/head', { title: 'Track a submission' }) %>
 <%- include('partials/public-nav') %>
 
-<main id="main" class="container container--narrow page">
+<main id="main" class="container container--narrow page tracking-page">
     <div class="page-head">
         <h1>Track a submission</h1>
         <p class="lede lede--sm">Enter the reference code you received after submitting. Dashes and letter case do not matter.</p>
@@ -23,56 +23,113 @@
     <% } %>
 
     <% if (feedback) {
-        const currentIndex = steps.findIndex(step => step.id === feedback.status_id);
+        const visibleUpdates = updates.slice().reverse();
+        const recentUpdates = visibleUpdates.slice(0, 5);
+        const earlierUpdates = visibleUpdates.slice(5);
     %>
-        <article class="card result">
-            <header class="result__head">
-                <div>
+        <article class="card result tracking-result">
+            <header class="tracking-summary">
+                <div class="tracking-summary__title">
                     <h2><%= feedback.subject %></h2>
                     <p class="muted">Reference <%= formatRef(feedback.reference_code) %></p>
                 </div>
                 <%- include('partials/status-badge', { badgeStatus: feedback.status_name }) %>
+                <p class="tracking-summary__updated">
+                    Last updated <%= fmtDate(feedback.last_updated_at) %>
+                    <% if (feedback.status_name === 'Resolved' && resolvedIn) { %>
+                        <span>Resolved in <%= resolvedIn %></span>
+                    <% } %>
+                </p>
             </header>
 
-            <ol class="stepper" aria-label="Progress">
-                <% steps.forEach((step, index) => { %>
-                    <li class="<%= index < currentIndex ? 'is-done' : (index === currentIndex ? 'is-current' : '') %>"<%- index === currentIndex ? ' aria-current="step"' : '' %>>
-                        <span class="stepper__dot"></span>
-                        <span class="stepper__label"><%= step.status_name %></span>
-                    </li>
-                <% }) %>
-            </ol>
+            <section class="tracking-progress" aria-label="Submission progress">
+                <ol class="stepper tracking-stepper">
+                    <% steps.forEach((step, index) => {
+                        const stepClass = index < currentStepIndex ? 'is-done' : (index === currentStepIndex ? 'is-current' : '');
+                    %>
+                        <li class="<%= stepClass %>"<%- index === currentStepIndex ? ' aria-current="step"' : '' %>>
+                            <span class="stepper__dot"></span>
+                            <span class="stepper__label"><%= step %></span>
+                            <span class="visually-hidden">Step <%= index + 1 %> of <%= steps.length %>: <%= step %></span>
+                        </li>
+                    <% }) %>
+                </ol>
+            </section>
 
-            <dl class="facts">
-                <div><dt>Type</dt><dd><%= feedback.feedback_type %></dd></div>
-                <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
-                <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>
-                <div><dt>Handled by</dt><dd><%= feedback.department_name || 'Waiting to be assigned' %></dd></div>
-            </dl>
-
-            <h3>What you wrote</h3>
-            <p class="prose"><%= feedback.description %></p>
-
-            <h3>Updates</h3>
-            <ol class="timeline">
-                <% history.slice().reverse().forEach(item => { %>
-                    <li class="timeline__item">
-                        <span class="timeline__dot timeline__dot--<%= statusClass(item.new_status) %>"></span>
-                        <div>
-                            <p class="timeline__title"><%= item.remarks ? 'Final response from administrator' : 'Status changed to ' + item.new_status %></p>
-                            <p class="timeline__meta"><%= fmtDate(item.changed_at) %></p>
-                            <% if (item.remarks) { %><p class="timeline__note"><%= item.remarks %></p><% } %>
-                        </div>
-                    </li>
-                <% }) %>
-                <li class="timeline__item">
-                    <span class="timeline__dot"></span>
-                    <div>
-                        <p class="timeline__title">Submission received</p>
-                        <p class="timeline__meta"><%= fmtDate(feedback.created_at) %></p>
+            <% if (response) { %>
+                <section class="tracking-response" aria-label="Latest response">
+                    <div class="tracking-response__heading">
+                        <h3>Response from <%= response.sender_role %></h3>
+                        <time datetime="<%= new Date(response.changed_at).toISOString() %>"><%= fmtDate(response.changed_at) %></time>
                     </div>
-                </li>
-            </ol>
+                    <p><%= response.message %></p>
+                </section>
+            <% } %>
+
+            <section class="tracking-updates" aria-labelledby="tracking-updates-title">
+                <h3 id="tracking-updates-title">Updates</h3>
+                <% if (!visibleUpdates.length) { %>
+                    <p class="muted">No updates are available yet.</p>
+                <% } %>
+
+                <ol class="tracking-update-list">
+                    <% let currentDay = ''; %>
+                    <% recentUpdates.forEach(item => {
+                        const day = fmtDate(item.changed_at, false);
+                        if (day !== currentDay) {
+                            currentDay = day;
+                    %>
+                        <li class="tracking-update-list__day"><h4><%= day %></h4></li>
+                    <% } %>
+                        <li class="tracking-update">
+                            <time class="tracking-update__time" datetime="<%= new Date(item.changed_at).toISOString() %>"><%= new Date(item.changed_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' }) %></time>
+                            <span class="timeline__dot <%= item.type === 'note' ? 'timeline__dot--note' : 'timeline__dot--' + statusClass(item.status_name) %>"></span>
+                            <div class="tracking-update__content">
+                                <p class="tracking-update__label"><%= item.label %></p>
+                                <% if (item.type === 'note') { %><p class="timeline__note"><%= item.remarks %></p><% } %>
+                            </div>
+                        </li>
+                    <% }) %>
+                </ol>
+
+                <% if (earlierUpdates.length) { %>
+                    <details class="tracking-earlier">
+                        <summary>Show earlier updates (<%= earlierUpdates.length %>)</summary>
+                        <ol class="tracking-update-list">
+                            <% currentDay = ''; %>
+                            <% earlierUpdates.forEach(item => {
+                                const day = fmtDate(item.changed_at, false);
+                                if (day !== currentDay) {
+                                    currentDay = day;
+                            %>
+                                <li class="tracking-update-list__day"><h4><%= day %></h4></li>
+                            <% } %>
+                                <li class="tracking-update">
+                                    <time class="tracking-update__time" datetime="<%= new Date(item.changed_at).toISOString() %>"><%= new Date(item.changed_at).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' }) %></time>
+                                    <span class="timeline__dot <%= item.type === 'note' ? 'timeline__dot--note' : 'timeline__dot--' + statusClass(item.status_name) %>"></span>
+                                    <div class="tracking-update__content">
+                                        <p class="tracking-update__label"><%= item.label %></p>
+                                        <% if (item.type === 'note') { %><p class="timeline__note"><%= item.remarks %></p><% } %>
+                                    </div>
+                                </li>
+                            <% }) %>
+                        </ol>
+                    </details>
+                <% } %>
+                <p class="tracking-updates__note">Internal workflow steps are hidden from this page.</p>
+            </section>
+
+            <section class="tracking-submission" aria-labelledby="tracking-submission-title">
+                <h3 id="tracking-submission-title">Your submission</h3>
+                <dl class="facts tracking-submission__facts">
+                    <div><dt>Type</dt><dd><%= feedback.feedback_type %></dd></div>
+                    <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
+                    <div><dt>Handled by</dt><dd><%= feedback.department_name || 'Waiting to be assigned' %></dd></div>
+                    <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>
+                </dl>
+                <h4>Description</h4>
+                <p class="prose"><%= feedback.description %></p>
+            </section>
         </article>
     <% } %>
 </main>

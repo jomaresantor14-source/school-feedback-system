@@ -29,7 +29,10 @@
                         <div>
                             <p class="timeline__title"><%= event.title %></p>
                             <p class="timeline__meta"><%= event.by ? event.by + ', ' : '' %><%= fmtDate(event.at) %></p>
-                            <% if (event.remarks) { %><p class="timeline__note"><%= event.remarks %></p><% } %>
+                            <% if (event.remarks) { %>
+                                <% if (event.visible_to_submitter === false) { %><span class="timeline__visibility">Staff only</span><% } %>
+                                <p class="timeline__note"><%= event.remarks %></p>
+                            <% } %>
                         </div>
                     </li>
                 <% }) %>
@@ -94,10 +97,18 @@
                         </select>
                     </div>
                     <div class="field">
-                        <label for="remarks">Internal department note <span class="optional">(optional)</span></label>
+                        <label for="remarks">Progress note <span class="optional">(optional)</span></label>
                         <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="Add an internal progress note."></textarea>
-                        <p class="hint">Internal notes are visible only to authorized staff.</p>
+                        <p class="hint">Leave unchecked to keep this note between staff.</p>
                     </div>
+                    <input type="hidden" name="visibility_option_present" value="1">
+                    <label class="visibility-toggle" for="visible_to_submitter">
+                        <input type="checkbox" id="visible_to_submitter" name="visible_to_submitter" value="1" checked>
+                        <span>
+                            <strong>Visible to submitter</strong>
+                            <small>Leave unchecked to keep this note between staff.</small>
+                        </span>
+                    </label>
                     <button type="submit" class="btn btn--primary btn--block" data-loading-text="Saving...">Save progress</button>
                 </form>
             </section>
