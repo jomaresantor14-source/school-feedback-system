@@ -84,7 +84,7 @@
         <% } else { %>
             <h2>Nothing here yet</h2>
             <% if (basePath === '/feedback/assign') { %>
-                <p class="muted">There are no unassigned submissions matching this status. To review or reassign an existing assignment, open <a href="/feedback/admin">All Feedback</a>.</p>
+                <p class="muted">There are no unassigned submissions or Pending assignments to complete. To review or reassign other existing assignments, open <a href="/feedback/admin">All Feedback</a>.</p>
             <% } else { %>
                 <p class="muted">
                     <% if (mode === 'department') { %>No feedback has been assigned to your department.<% } else { %>No feedback has been submitted yet.<% } %>
@@ -129,7 +129,7 @@
                             <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
                             <td>
                                 <% if (canAssign && !['Resolved', 'Awaiting Admin Review'].includes(item.status_name)) { %>
-                                    <form class="assign" action="/feedback/view/<%= item.id %>/assign" method="POST" data-confirm="Assign this submission to the selected department?">
+                                    <form class="assign" action="/feedback/view/<%= item.id %>/assign" method="POST" data-confirm="<%= item.status_name === 'Pending' && item.assigned_department_id ? 'Confirm this existing department assignment?' : 'Assign this submission to the selected department?' %>">
                                         <%- include('partials/csrf') %>
                                         <input type="hidden" name="return_to" value="<%= currentUrl %>">
                                         <label class="sr-only" for="dept-<%= item.id %>">Department for <%= item.subject %></label>
@@ -141,7 +141,7 @@
                                         </select>
                                         <label class="sr-only" for="assignment-note-<%= item.id %>">Optional assignment remarks for <%= item.subject %></label>
                                         <input class="input input--sm" id="assignment-note-<%= item.id %>" name="assignment_remarks" maxlength="1000" placeholder="Optional assignment note">
-                                        <button type="submit" class="btn btn--ghost btn--sm">Assign</button>
+                                        <button type="submit" class="btn btn--ghost btn--sm"><%= item.status_name === 'Pending' && item.assigned_department_id ? 'Confirm assignment' : 'Assign' %></button>
                                     </form>
                                 <% } else { %>
                                     <%= item.department_name || 'Not assigned' %>

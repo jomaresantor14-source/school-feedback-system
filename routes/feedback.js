@@ -324,6 +324,7 @@ async function renderList(req, res, config) {
     options.scopeUnassigned = Boolean(
         config.defaultOptions && config.defaultOptions.department === 'unassigned'
     );
+    options.requireAssignmentAction = Boolean(config.requireAssignmentAction);
     options.excludeStatusNames = config.excludeStatusNames || [];
     options.requireAssignedDepartment = Boolean(config.requireAssignedDepartment);
 
@@ -442,8 +443,8 @@ router.get('/assign', requireRole('admin'), (req, res) =>
         mode: 'admin',
         basePath: '/feedback/assign',
         pageTitle: 'Department Assignment',
-        intro: 'Review submissions without a handling department and assign them to the appropriate team.',
-        defaultOptions: { department: 'unassigned' },
+        intro: 'Assign unassigned submissions or confirm existing assignments that are still marked Pending.',
+        requireAssignmentAction: true,
         excludeStatusNames: ['Resolved', 'Awaiting Admin Review'],
         canAssign: true,
         showDepartmentFilter: false,
@@ -1194,58 +1195,76 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         }
 
         const oldDepartmentId = rows[0].assigned_department_id;
+        const isPending = rows[0].status_name === 'Pending';
 
-        if (oldDepartmentId !== null && Number(oldDepartmentId) === departmentId) {
+        if (
+            oldDepartmentId !== null &&
+            Number(oldDepartmentId) === departmentId &&
+            !isPending
+        ) {
             return { type: 'unchanged', name: departmentRows[0].department_name };
         }
 
-        const [statusRows] = await conn.query(
-            'SELECT id, status_name FROM statuses WHERE status_name IN (?, ?)',
-            ['Pending', 'Assigned']
-        );
-        const pendingStatus = statusRows.find(status => status.status_name === 'Pending');
-        const assignedStatus = statusRows.find(status => status.status_name === 'Assigned');
+        let pendingStatus = null;
+        let assignedStatus = null;
 
-        if (!assignedStatus) {
-            throw new Error('Assigned status is missing from the statuses table.');
+        if (isPending) {
+            const [statusRows] = await conn.query(
+                'SELECT id, status_name FROM statuses WHERE status_name IN (?, ?)',
+                ['Pending', 'Assigned']
+            );
+            pendingStatus = statusRows.find(status => status.status_name === 'Pending');
+            assignedStatus = statusRows.find(status => status.status_name === 'Assigned');
+
+            if (!pendingStatus || !assignedStatus) {
+                throw new Error('Pending or Assigned status is missing from the statuses table.');
+            }
         }
 
-        await conn.query(
+        const [update] = await conn.query(
             `UPDATE feedback
              SET assigned_department_id = ?,
-                 status_id = CASE
-                     WHEN status_id = ? THEN ?
-                     ELSE status_id
-                 END
+                 status_id = ?
              WHERE id = ?`,
-            [
-                departmentId,
-                pendingStatus ? pendingStatus.id : -1,
-                assignedStatus.id,
-                id
-            ]
+            [departmentId, isPending ? assignedStatus.id : rows[0].status_id, id]
         );
 
-        if (
-            pendingStatus &&
-            Number(rows[0].status_id) === Number(pendingStatus.id)
-        ) {
+        if (!update.affectedRows) {
+            throw new Error('The feedback assignment did not update a record.');
+        }
+
+        if (isPending) {
             await conn.query(
                 `INSERT INTO feedback_history
                     (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-                 VALUES (?, ?, ?, ?, NULL)`,
-                [id, user.id, pendingStatus.id, assignedStatus.id]
+                 VALUES (?, ?, ?, ?, ?)`,
+                [
+                    id,
+                    user.id,
+                    pendingStatus.id,
+                    assignedStatus.id,
+                    oldDepartmentId !== null && Number(oldDepartmentId) === departmentId
+                        ? assignmentRemarks || null
+                        : null
+                ]
             );
         }
 
-        await conn.query(
-            `INSERT INTO feedback_assignment_history
-                (feedback_id, changed_by, old_department_id, new_department_id, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
-            [id, user.id, oldDepartmentId, departmentId, assignmentRemarks || null]
-        );
+        if (oldDepartmentId === null || Number(oldDepartmentId) !== departmentId) {
+            await conn.query(
+                `INSERT INTO feedback_assignment_history
+                    (feedback_id, changed_by, old_department_id, new_department_id, remarks)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [id, user.id, oldDepartmentId, departmentId, assignmentRemarks || null]
+            );
+        }
 
-        return { type: 'assigned', name: departmentRows[0].department_name };
+        return {
+            type: isPending && oldDepartmentId !== null && Number(oldDepartmentId) === departmentId
+                ? 'confirmed'
+                : 'assigned',
+            name: departmentRows[0].department_name
+        };
     });
 
     if (outcome.type === 'missing') return notFound(res);
@@ -1258,6 +1277,8 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         flash(req, 'error', 'That department does not exist.');
     } else if (outcome.type === 'unchanged') {
         flash(req, 'info', `Already assigned to ${outcome.name}.`);
+    } else if (outcome.type === 'confirmed') {
+        flash(req, 'success', `Assignment to ${outcome.name} was confirmed. The feedback is now Assigned.`);
     } else {
         flash(req, 'success', `Assigned to ${outcome.name}.`);
     }
