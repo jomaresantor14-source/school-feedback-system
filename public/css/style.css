@@ -1207,6 +1207,41 @@ select.input {
     border-left-color: var(--highlight);
 }
 
+.sidebar--faculty .side-nav {
+    gap: 4px;
+}
+
+.sidebar--faculty .side-nav a {
+    min-height: 42px;
+}
+
+.side-nav__logout-form {
+    margin: 0;
+}
+
+.side-nav__logout {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}
+
+.side-nav__logout:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
 .sidebar :focus-visible {
     outline-color: var(--highlight);
 }
@@ -1898,6 +1933,18 @@ select.input {
 
     .side-nav a {
         flex: none;
+        white-space: nowrap;
+        border-left: 0;
+        border-bottom: 3px solid transparent;
+    }
+
+    .side-nav__logout-form {
+        flex: none;
+    }
+
+    .side-nav__logout {
+        width: auto;
+        min-height: 42px;
         white-space: nowrap;
         border-left: 0;
         border-bottom: 3px solid transparent;

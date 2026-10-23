@@ -56,12 +56,15 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     res.locals.user = req.session.user;
 
     const scope = scopeFor(req.session.user);
-    const { statuses } = await lookups();
+    const { categories, statuses } = await lookups();
 
     // The list shown under the numbers depends on the role.
     let attention = { title: 'Latest submissions', rows: [], link: null };
     const listOptions = { perPage: 6 };
     let departmentFeedback = null;
+    let facultyConcerns = { rows: [], total: 0 };
+    let facultySuggestions = { rows: [], total: 0 };
+    let submittedToAdmin = { rows: [], total: 0 };
 
     if (me.role === 'admin') {
         attention.title = 'Waiting for a department';
@@ -74,6 +77,38 @@ router.get('/dashboard', requireLogin, async (req, res) => {
             page,
             perPage: 15
         });
+
+        if (me.role === 'faculty' && me.department_id) {
+            const concernCategory = categories.find(category =>
+                /faculty.*concern|concern.*faculty/i.test(category.category_name)
+            );
+            const suggestionCategory = categories.find(category =>
+                /faculty.*suggestion|suggestion.*faculty/i.test(category.category_name)
+            );
+
+            [facultyConcerns, facultySuggestions, submittedToAdmin] =
+                await Promise.all([
+                    concernCategory
+                        ? listFeedback({
+                            departmentId: me.department_id,
+                            categoryId: concernCategory.id,
+                            perPage: 15
+                        })
+                        : Promise.resolve(facultyConcerns),
+                    suggestionCategory
+                        ? listFeedback({
+                            departmentId: me.department_id,
+                            categoryId: suggestionCategory.id,
+                            perPage: 15
+                        })
+                        : Promise.resolve(facultySuggestions),
+                    listFeedback({
+                        departmentId: me.department_id,
+                        statusName: 'Awaiting Admin Review',
+                        perPage: 15
+                    })
+                ]);
+        }
     } else if (me.role === 'institutional_management') {
         attention.title = 'Latest submissions';
         attention.link = { href: '/feedback/management', text: 'Open overview' };
@@ -101,6 +136,12 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         departmentDashboard: DEPT_ROLES.includes(me.role),
         departmentFeedback,
         departmentPageUrl,
+        facultyConcerns: facultyConcerns.rows,
+        facultyConcernsTotal: facultyConcerns.total,
+        facultySuggestions: facultySuggestions.rows,
+        facultySuggestionsTotal: facultySuggestions.total,
+        submittedToAdmin: submittedToAdmin.rows,
+        submittedToAdminTotal: submittedToAdmin.total,
         cards: {
             total,
             pendingAssigned: countOf('Pending') + countOf('Assigned'),
@@ -118,6 +159,27 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         attention,
         noDepartment: DEPT_ROLES.includes(me.role) && !me.department_id
     });
+});
+
+router.get('/profile', requireLogin, async (req, res) => {
+    const [[profile]] = await db.query(
+        `SELECT u.full_name, u.email, u.role, d.department_name
+         FROM users u
+         LEFT JOIN departments d ON d.id = u.department_id
+         WHERE u.id = ?
+         LIMIT 1`,
+        [req.session.user.id]
+    );
+
+    if (!profile) {
+        return res.status(404).render('error', {
+            code: 404,
+            title: 'Profile not found',
+            message: 'Your account could not be found.'
+        });
+    }
+
+    res.render('staff-profile', { profile });
 });
 
 router.get('/reports', requireRole(...REPORT_ROLES), async (req, res) => {

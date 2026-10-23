@@ -5,6 +5,7 @@
     const query = new URLSearchParams(currentUrl.split('?')[1] || '');
     const onUnassigned = query.get('department') === 'unassigned';
     const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
+    const facultyCategory = String(query.get('faculty_category') || '');
 
     if (role === 'admin') {
         items.push(
@@ -15,7 +16,17 @@
             { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Approve Resolution', icon: 'check', statusName: 'Awaiting Admin Review' }
         );
     }
-    if (deptStaff) {
+    if (role === 'faculty') {
+        items[0].label = 'Faculty Dashboard';
+        items.push(
+            { href: '/feedback/department-inbox', label: 'Assigned Feedback', icon: 'inbox', inbox: true },
+            { href: '/feedback/department-inbox?faculty_category=concern', label: 'Faculty Concerns', icon: 'alert', facultyCategory: 'concern' },
+            { href: '/feedback/department-inbox?faculty_category=suggestion', label: 'Faculty Suggestions', icon: 'plus', facultyCategory: 'suggestion' },
+            { href: '/feedback/department-inbox?status_name=Awaiting+Admin+Review', label: 'Submitted to Admin', icon: 'send', statusName: 'Awaiting Admin Review' },
+            { href: '/feedback/department-history', label: 'Feedback History', icon: 'chart', history: true },
+            { href: '/staff/profile', label: 'My Profile', icon: 'user' }
+        );
+    } else if (deptStaff) {
         items.push(
             { href: '/feedback/department-inbox', label: 'Inbox', icon: 'inbox', inbox: true },
             { href: '/feedback/department-inbox?status_name=Under+Review', label: 'Under Review', icon: 'eye', statusName: 'Under Review' },
@@ -31,7 +42,7 @@
     if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
 %>
 <div class="app">
-    <aside class="sidebar">
+    <aside class="sidebar<%= role === 'faculty' ? ' sidebar--faculty' : '' %>">
         <a class="brand brand--light" href="/staff/dashboard"><%- include('brand') %></a>
 
         <nav class="side-nav" aria-label="Staff">
@@ -41,13 +52,25 @@
                     : item.statusName
                         ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
                     : item.inbox
-                        ? path === item.href && !query.has('status_name')
-                        : path === item.href;
+                        ? path === item.href && !query.has('status_name') && !facultyCategory
+                        : item.facultyCategory
+                            ? path === item.href.split('?')[0] && facultyCategory === item.facultyCategory
+                            : item.history
+                                ? path === item.href
+                                : path === item.href;
             %>
                 <a href="<%= item.href %>"<%- current ? ' aria-current="page"' : '' %>>
                     <%- icon(item.icon, 18) %><span><%= item.label %></span>
                 </a>
             <% }) %>
+            <% if (role === 'faculty') { %>
+                <form class="side-nav__logout-form" action="/auth/logout" method="POST">
+                    <%- include('csrf') %>
+                    <button type="submit" class="side-nav__logout">
+                        <%- icon('logout', 18) %><span>Logout</span>
+                    </button>
+                </form>
+            <% } %>
         </nav>
 
         <div class="side-user">
@@ -56,10 +79,12 @@
                 <strong><%= user.full_name %></strong>
                 <small><%= roleLabel(user.role) %></small>
             </span>
-            <form action="/auth/logout" method="POST">
-                <%- include('csrf') %>
-                <button type="submit" class="icon-btn" title="Log out" aria-label="Log out"><%- icon('logout', 18) %></button>
-            </form>
+            <% if (role !== 'faculty') { %>
+                <form action="/auth/logout" method="POST">
+                    <%- include('csrf') %>
+                    <button type="submit" class="icon-btn" title="Log out" aria-label="Log out"><%- icon('logout', 18) %></button>
+                </form>
+            <% } %>
         </div>
     </aside>
 

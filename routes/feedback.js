@@ -301,6 +301,9 @@ router.post('/track', (req, res) => {
 async function renderList(req, res, config) {
     const filters = parseFilters(req.query);
     const options = { ...filters };
+    let facultyCategoryAvailable = null;
+
+    const lists = await lookups();
 
     if (config.mode === 'department') {
         const departmentId = req.session.user.department_id;
@@ -315,6 +318,22 @@ async function renderList(req, res, config) {
 
         options.departmentId = departmentId;
         options.department = null;
+
+        const facultyCategory = String(req.query.faculty_category || '');
+        const facultyCategoryPatterns = {
+            concern: /faculty.*concern|concern.*faculty/i,
+            suggestion: /faculty.*suggestion|suggestion.*faculty/i
+        };
+
+        if (facultyCategoryPatterns[facultyCategory]) {
+            const category = lists.categories.find(item =>
+                facultyCategoryPatterns[facultyCategory].test(item.category_name)
+            );
+
+            filters.facultyCategory = facultyCategory;
+            facultyCategoryAvailable = Boolean(category);
+            options.categoryId = category ? Number(category.id) : -1;
+        }
     }
 
     if (config.mode === 'mine') {
@@ -322,10 +341,7 @@ async function renderList(req, res, config) {
         options.department = null;
     }
 
-    const [result, lists] = await Promise.all([
-        listFeedback(options),
-        lookups()
-    ]);
+    const result = await listFeedback(options);
 
     if (filters.statusName) {
         const selectedStatus = lists.statuses.find(
@@ -339,7 +355,11 @@ async function renderList(req, res, config) {
         if (filters.q) params.set('q', filters.q);
         if (filters.statusName) params.set('status_name', filters.statusName);
         else if (filters.statusId) params.set('status', filters.statusId);
-        if (filters.categoryId) params.set('category', filters.categoryId);
+        if (filters.facultyCategory) {
+            params.set('faculty_category', filters.facultyCategory);
+        } else if (filters.categoryId) {
+            params.set('category', filters.categoryId);
+        }
         if (filters.department && config.mode !== 'department') {
             params.set('department', filters.department);
         }
@@ -353,6 +373,7 @@ async function renderList(req, res, config) {
         filters.statusId ||
         filters.statusName ||
         filters.categoryId ||
+        filters.facultyCategory ||
         (filters.department && config.mode !== 'department')
     );
 
@@ -362,6 +383,7 @@ async function renderList(req, res, config) {
         ...lists,
         filters,
         filtersActive,
+        facultyCategoryAvailable,
         pageUrl
     });
 }
@@ -392,9 +414,13 @@ router.get('/department-inbox', requireRole(...DEPT_ROLES), (req, res) =>
     renderList(req, res, {
         mode: 'department',
         basePath: '/feedback/department-inbox',
-        pageTitle: req.query.status_name
-            ? String(req.query.status_name)
-            : 'Inbox',
+        pageTitle: req.query.faculty_category === 'concern'
+            ? 'Faculty Concerns'
+            : req.query.faculty_category === 'suggestion'
+                ? 'Faculty Suggestions'
+                : req.query.status_name
+                    ? String(req.query.status_name)
+                    : 'Inbox',
         intro: 'Feedback assigned to your department. Open one to update its status or leave a note.',
         canAssign: false,
         showDepartmentFilter: false

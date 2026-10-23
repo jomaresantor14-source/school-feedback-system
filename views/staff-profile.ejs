@@ -1,0 +1,31 @@
+<%- include('partials/head', { title: 'My Profile' }) %>
+<%- include('partials/staff-open') %>
+
+<div class="page-head">
+    <h1>My Profile</h1>
+    <p class="muted">Your staff account information.</p>
+</div>
+
+<section class="card">
+    <dl class="facts facts--stack">
+        <div>
+            <dt>Name</dt>
+            <dd><%= profile.full_name %></dd>
+        </div>
+        <div>
+            <dt>Email</dt>
+            <dd><%= profile.email %></dd>
+        </div>
+        <div>
+            <dt>Department</dt>
+            <dd><%= profile.department_name || 'Not assigned' %></dd>
+        </div>
+        <div>
+            <dt>Role</dt>
+            <dd><%= roleLabel(profile.role) %></dd>
+        </div>
+    </dl>
+</section>
+
+<%- include('partials/staff-close') %>
+<%- include('partials/foot') %>

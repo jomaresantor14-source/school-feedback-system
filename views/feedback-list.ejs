@@ -54,7 +54,11 @@
 
 <% if (rows.length === 0) { %>
     <section class="card empty-card">
-        <% if (filtersActive) { %>
+        <% if (filters.facultyCategory && facultyCategoryAvailable === false) { %>
+            <h2>Faculty category is not configured</h2>
+            <p class="muted">Add a matching faculty concern or faculty suggestion category before feedback can appear here.</p>
+            <a class="btn btn--ghost" href="<%= basePath %>">Back to assigned feedback</a>
+        <% } else if (filtersActive) { %>
             <h2>No submissions match those filters</h2>
             <p class="muted">Try a different search or clear the filters.</p>
             <a class="btn btn--primary" href="<%= basePath %>">Clear filters</a>
