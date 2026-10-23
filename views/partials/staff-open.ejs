@@ -1,11 +1,26 @@
 <%
     const role = user.role;
     const deptStaff = DEPT_ROLES.includes(role);
-    const path = currentUrl.split('?')[0];
-    const query = new URLSearchParams(currentUrl.split('?')[1] || '');
+    const currentPath = (currentUrl || '/').split('?')[0];
+    const query = new URLSearchParams((currentUrl || '').split('?')[1] || '');
     const onUnassigned = query.get('department') === 'unassigned';
-    const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
     const feedbackType = String(query.get('feedback_type') || '');
+    const statusName = String(query.get('status_name') || '');
+
+    const isActive = (href, opts = {}) => {
+        const base = String(href || '').split('?')[0];
+        const q = new URLSearchParams(String(href || '').split('?')[1] || '');
+
+        if (opts.route) return currentPath === opts.route;
+        if (opts.statusName) return currentPath === base && statusName === opts.statusName;
+        if (opts.feedbackType) return currentPath === base && feedbackType === opts.feedbackType;
+        if (opts.inbox) return currentPath === base && !statusName && !feedbackType;
+        if (opts.history) return currentPath === base;
+        if (opts.unassigned) return currentPath.startsWith('/feedback/admin') && onUnassigned;
+        return currentPath === base;
+    };
+
+    const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
 
     if (role === 'admin') {
         items.push(
@@ -16,6 +31,7 @@
             { href: '/feedback/resolutions', label: 'Resolutions', icon: 'check', route: '/feedback/resolutions' }
         );
     }
+
     if (role === 'faculty') {
         items[0].label = 'Faculty Dashboard';
         items.push(
@@ -35,6 +51,7 @@
             { href: '/feedback/department-history', label: 'Feedback History for Their Department', icon: 'chart', history: true }
         );
     }
+
     if (role === 'institutional_management') items.push({ href: '/feedback/management', label: 'School overview', icon: 'eye' });
     if (role === 'admin') items.push({ href: '/staff/reports', label: 'Reports and Analytics', icon: 'chart' });
     else if (role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
@@ -47,19 +64,7 @@
 
         <nav class="side-nav" aria-label="Staff">
             <% items.forEach(item => {
-                const current = item.unassigned
-                    ? path.startsWith('/feedback/admin') && onUnassigned
-                        : item.route
-                            ? path === item.route
-                            : item.statusName
-                        ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
-                    : item.inbox
-                        ? path === item.href && !query.has('status_name') && !feedbackType
-                        : item.feedbackType
-                            ? path === item.href.split('?')[0] && feedbackType === item.feedbackType
-                            : item.history
-                                ? path === item.href
-                                : path === item.href;
+                const current = isActive(item.href, item);
             %>
                 <a href="<%= item.href %>"<%- current ? ' aria-current="page"' : '' %>>
                     <%- icon(item.icon, 18) %><span><%= item.label %></span>

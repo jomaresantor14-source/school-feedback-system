@@ -84,7 +84,18 @@ router.post('/login', async (req, res) => {
     });
 });
 
-// Log out
+// Log out (support both direct browser access and forms)
+router.get('/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            console.error(err);
+        }
+
+        res.clearCookie('connect.sid');
+        res.redirect('/auth/login');
+    });
+});
+
 router.post('/logout', (req, res) => {
     req.session.destroy((err) => {
         if (err) {
