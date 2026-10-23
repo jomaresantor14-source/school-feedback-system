@@ -42,6 +42,7 @@
             <h2>Details</h2>
             <dl class="facts facts--stack">
                 <div><dt>Submitted by</dt><dd><%= submitter %><% if (submitterEmail) { %><span class="sub"><%= submitterEmail %></span><% } %></dd></div>
+                <div><dt>Type</dt><dd><%= feedback.feedback_type %></dd></div>
                 <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
                 <div><dt>Department</dt><dd><%= feedback.department_name || 'Not assigned' %></dd></div>
                 <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>

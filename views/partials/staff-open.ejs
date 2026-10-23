@@ -5,7 +5,7 @@
     const query = new URLSearchParams(currentUrl.split('?')[1] || '');
     const onUnassigned = query.get('department') === 'unassigned';
     const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
-    const facultyCategory = String(query.get('faculty_category') || '');
+    const feedbackType = String(query.get('feedback_type') || '');
 
     if (role === 'admin') {
         items.push(
@@ -20,8 +20,8 @@
         items[0].label = 'Faculty Dashboard';
         items.push(
             { href: '/feedback/department-inbox', label: 'Assigned Feedback', icon: 'inbox', inbox: true },
-            { href: '/feedback/department-inbox?faculty_category=concern', label: 'Faculty Concerns', icon: 'alert', facultyCategory: 'concern' },
-            { href: '/feedback/department-inbox?faculty_category=suggestion', label: 'Faculty Suggestions', icon: 'plus', facultyCategory: 'suggestion' },
+            { href: '/feedback/department-inbox?feedback_type=Concern', label: 'Faculty Concerns', icon: 'alert', feedbackType: 'Concern' },
+            { href: '/feedback/department-inbox?feedback_type=Suggestion', label: 'Faculty Suggestions', icon: 'plus', feedbackType: 'Suggestion' },
             { href: '/feedback/department-inbox?status_name=Awaiting+Admin+Review', label: 'Submitted to Admin', icon: 'send', statusName: 'Awaiting Admin Review' },
             { href: '/feedback/department-history', label: 'Feedback History', icon: 'chart', history: true },
             { href: '/staff/profile', label: 'My Profile', icon: 'user' }
@@ -52,9 +52,9 @@
                     : item.statusName
                         ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
                     : item.inbox
-                        ? path === item.href && !query.has('status_name') && !facultyCategory
-                        : item.facultyCategory
-                            ? path === item.href.split('?')[0] && facultyCategory === item.facultyCategory
+                        ? path === item.href && !query.has('status_name') && !feedbackType
+                        : item.feedbackType
+                            ? path === item.href.split('?')[0] && feedbackType === item.feedbackType
                             : item.history
                                 ? path === item.href
                                 : path === item.href;

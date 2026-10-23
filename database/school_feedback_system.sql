@@ -80,6 +80,7 @@ CREATE TABLE `feedback` (
   `submitter_email` varchar(150) DEFAULT NULL,
   `is_anonymous` tinyint(1) NOT NULL DEFAULT 0,
   `category_id` int(11) NOT NULL,
+  `feedback_type` enum('Feedback','Concern','Suggestion') NOT NULL DEFAULT 'Feedback',
   `subject` varchar(200) NOT NULL,
   `description` text NOT NULL,
   `status_id` int(11) NOT NULL,

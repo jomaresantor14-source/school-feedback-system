@@ -49,19 +49,65 @@
         </div>
 
         <div class="stat stat--pending">
-            <span class="stat__num"><%= facultyConcernsTotal %></span>
-            <span class="stat__label">Faculty Concerns</span>
+            <span class="stat__num"><%= pendingConcernCount %></span>
+            <span class="stat__label">Pending Concerns</span>
         </div>
 
         <div class="stat stat--progress">
-            <span class="stat__num"><%= facultySuggestionsTotal %></span>
-            <span class="stat__label">Faculty Suggestions</span>
+            <span class="stat__num"><%= facultyInProgressCount %></span>
+            <span class="stat__label">In Progress</span>
         </div>
 
         <div class="stat">
-            <span class="stat__num"><%= submittedToAdminTotal %></span>
-            <span class="stat__label">Submitted to Admin</span>
+            <span class="stat__num"><%= facultyResolvedCount %></span>
+            <span class="stat__label">Resolved</span>
         </div>
+    </section>
+
+    <section class="card card--flush">
+        <header class="card__head"><h2>Recent assignments</h2></header>
+        <% if (!recentAssignments.length) { %>
+            <p class="empty">No feedback has been assigned to your department yet.</p>
+        <% } else { %>
+            <div class="table-wrap">
+                <table class="table table--list">
+                    <thead><tr><th>Subject</th><th>Type</th><th>Assigned</th><th>Action</th></tr></thead>
+                    <tbody>
+                        <% recentAssignments.forEach(item => { %>
+                            <tr>
+                                <td><a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a><span class="sub"><%= formatRef(item.reference_code) %></span></td>
+                                <td><%= item.feedback_type %></td>
+                                <td class="nowrap"><%= fmtDate(item.changed_at, false) %></td>
+                                <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
+    </section>
+
+    <section class="card card--flush">
+        <header class="card__head"><h2>Recent status updates</h2></header>
+        <% if (!recentStatusUpdates.length) { %>
+            <p class="empty">No status updates have been recorded yet.</p>
+        <% } else { %>
+            <div class="table-wrap">
+                <table class="table table--list">
+                    <thead><tr><th>Feedback</th><th>Change</th><th>Date</th><th>Action</th></tr></thead>
+                    <tbody>
+                        <% recentStatusUpdates.forEach(item => { %>
+                            <tr>
+                                <td><a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a><span class="sub"><%= formatRef(item.reference_code) %></span></td>
+                                <td><%= item.old_status ? `${item.old_status} → ${item.new_status}` : `Submitted as ${item.new_status}` %><% if (item.remarks) { %><span class="sub"><%= item.remarks %></span><% } %></td>
+                                <td class="nowrap"><%= fmtDate(item.changed_at, false) %></td>
+                                <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
     </section>
 
     <!-- Faculty Concerns -->
@@ -90,7 +136,7 @@
                             <tr>
                                 <td>
                                     <a class="row-link"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
+                                       href="/feedback/view/<%= item.id %>">
                                         <%= item.subject %>
                                     </a>
                                 </td>
@@ -104,8 +150,8 @@
                                 <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
                                 <td>
                                     <a class="btn btn--ghost btn--sm"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                        Track
+                                       href="/feedback/view/<%= item.id %>">
+                                        View Details
                                     </a>
                                 </td>
                             </tr>
@@ -142,7 +188,7 @@
                             <tr>
                                 <td>
                                     <a class="row-link"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
+                                       href="/feedback/view/<%= item.id %>">
                                         <%= item.subject %>
                                     </a>
                                 </td>
@@ -156,8 +202,8 @@
                                 <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
                                 <td>
                                     <a class="btn btn--ghost btn--sm"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                        Track
+                                       href="/feedback/view/<%= item.id %>">
+                                        View Details
                                     </a>
                                 </td>
                             </tr>
@@ -187,7 +233,8 @@
                             <th>Category</th>
                             <th>Status</th>
                             <th>Reference Number</th>
-                            <th>Date Submitted</th>
+                            <th>Date Forwarded</th>
+                            <th>Department action</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -196,7 +243,7 @@
                             <tr>
                                 <td>
                                     <a class="row-link"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
+                                       href="/feedback/view/<%= item.id %>">
                                         <%= item.subject %>
                                     </a>
                                 </td>
@@ -207,11 +254,12 @@
                                     }) %>
                                 </td>
                                 <td><%= formatRef(item.reference_code) %></td>
-                                <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
+                                <td class="nowrap"><%= item.date_forwarded ? fmtDate(item.date_forwarded, false) : '—' %></td>
+                                <td><%= item.latest_remarks || '—' %></td>
                                 <td>
                                     <a class="btn btn--ghost btn--sm"
-                                       href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                        Track
+                                       href="/feedback/view/<%= item.id %>">
+                                        View Details
                                     </a>
                                 </td>
                             </tr>

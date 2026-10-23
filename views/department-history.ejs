@@ -20,7 +20,7 @@
                     <tr>
                         <th>Subject</th>
                         <th>Reference</th>
-                        <th>Previous status</th>
+                        <th>Feedback type</th>
                         <th>Current status</th>
                         <th>Date submitted</th>
                         <th>Last updated</th>
@@ -34,11 +34,31 @@
                         <tr>
                             <td><a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a></td>
                             <td><%= formatRef(item.reference_code) %></td>
-                            <td><%= item.previous_status || '—' %></td>
+                            <td><%= item.feedback_type %></td>
                             <td><%- include('partials/status-badge', { badgeStatus: item.current_status }) %></td>
                             <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
                             <td class="nowrap"><%= fmtDate(item.last_updated_at || item.created_at, false) %></td>
-                            <td><%= item.department_remarks || '—' %></td>
+                            <td>
+                                <%= item.department_remarks || '—' %>
+                                <% const events = historyByFeedback[item.id] || []; %>
+                                <% if (events.length) { %>
+                                    <details class="history-events">
+                                        <summary><%= events.length %> recorded updates</summary>
+                                        <ol class="timeline">
+                                            <% events.forEach(event => { %>
+                                                <li class="timeline__item">
+                                                    <span class="timeline__dot"></span>
+                                                    <div>
+                                                        <p class="timeline__title"><%= event.type %>: <%= event.summary %></p>
+                                                        <p class="timeline__meta"><%= fmtDate(event.at) %> · <%= event.by %></p>
+                                                        <% if (event.remarks) { %><p class="timeline__note"><%= event.remarks %></p><% } %>
+                                                    </div>
+                                                </li>
+                                            <% }) %>
+                                        </ol>
+                                    </details>
+                                <% } %>
+                            </td>
                             <td><%= item.current_status === 'Resolved' ? (item.admin_response || 'Resolved by administrator.') : '—' %></td>
                             <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View History</a></td>
                         </tr>

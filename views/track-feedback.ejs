@@ -44,6 +44,7 @@
             </ol>
 
             <dl class="facts">
+                <div><dt>Type</dt><dd><%= feedback.feedback_type %></dd></div>
                 <div><dt>Category</dt><dd><%= feedback.category_name %></dd></div>
                 <div><dt>Submitted</dt><dd><%= fmtDate(feedback.created_at) %></dd></div>
                 <div><dt>Handled by</dt><dd><%= feedback.department_name || 'Waiting to be assigned' %></dd></div>

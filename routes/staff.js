@@ -7,6 +7,7 @@ const { DEPT_ROLES } = require('../lib/constants');
 const {
     listFeedback,
     statusCounts,
+    feedbackTypeStatusCounts,
     categoryCounts,
     lookups
 } = require('../lib/feedbackQueries');
@@ -56,8 +57,6 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     res.locals.user = req.session.user;
 
     const scope = scopeFor(req.session.user);
-    const { categories, statuses } = await lookups();
-
     // The list shown under the numbers depends on the role.
     let attention = { title: 'Latest submissions', rows: [], link: null };
     const listOptions = { perPage: 6 };
@@ -65,6 +64,8 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     let facultyConcerns = { rows: [], total: 0 };
     let facultySuggestions = { rows: [], total: 0 };
     let submittedToAdmin = { rows: [], total: 0 };
+    let recentAssignments = [];
+    let recentStatusUpdates = [];
 
     if (me.role === 'admin') {
         attention.title = 'Waiting for a department';
@@ -79,35 +80,56 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         });
 
         if (me.role === 'faculty' && me.department_id) {
-            const concernCategory = categories.find(category =>
-                /faculty.*concern|concern.*faculty/i.test(category.category_name)
-            );
-            const suggestionCategory = categories.find(category =>
-                /faculty.*suggestion|suggestion.*faculty/i.test(category.category_name)
-            );
-
             [facultyConcerns, facultySuggestions, submittedToAdmin] =
                 await Promise.all([
-                    concernCategory
-                        ? listFeedback({
-                            departmentId: me.department_id,
-                            categoryId: concernCategory.id,
-                            perPage: 15
-                        })
-                        : Promise.resolve(facultyConcerns),
-                    suggestionCategory
-                        ? listFeedback({
-                            departmentId: me.department_id,
-                            categoryId: suggestionCategory.id,
-                            perPage: 15
-                        })
-                        : Promise.resolve(facultySuggestions),
+                    listFeedback({
+                        departmentId: me.department_id,
+                        feedbackType: 'Concern',
+                        perPage: 15
+                    }),
+                    listFeedback({
+                        departmentId: me.department_id,
+                        feedbackType: 'Suggestion',
+                        perPage: 15
+                    }),
                     listFeedback({
                         departmentId: me.department_id,
                         statusName: 'Awaiting Admin Review',
                         perPage: 15
                     })
                 ]);
+
+            const [[assignments], [updates]] = await Promise.all([
+                db.query(
+                    `SELECT f.id, f.subject, f.reference_code, f.feedback_type,
+                            ah.changed_at, d.department_name
+                     FROM feedback_assignment_history ah
+                     JOIN feedback f ON f.id = ah.feedback_id
+                     JOIN departments d ON d.id = ah.new_department_id
+                     WHERE ah.new_department_id = ?
+                       AND f.assigned_department_id = ?
+                     ORDER BY ah.changed_at DESC, ah.id DESC
+                     LIMIT 5`,
+                    [me.department_id, me.department_id]
+                ),
+                db.query(
+                    `SELECT f.id, f.subject, f.reference_code, fh.changed_at,
+                            os.status_name AS old_status, ns.status_name AS new_status,
+                            fh.remarks
+                     FROM feedback_history fh
+                     JOIN feedback f ON f.id = fh.feedback_id
+                     LEFT JOIN statuses os ON os.id = fh.old_status_id
+                     JOIN statuses ns ON ns.id = fh.new_status_id
+                     LEFT JOIN users changed_by ON changed_by.id = fh.changed_by
+                     WHERE f.assigned_department_id = ?
+                       AND (changed_by.role = 'admin' OR changed_by.department_id = ? OR changed_by.id IS NULL)
+                     ORDER BY fh.changed_at DESC, fh.id DESC
+                     LIMIT 5`,
+                    [me.department_id, me.department_id]
+                )
+            ]);
+            recentAssignments = assignments;
+            recentStatusUpdates = updates;
         }
     } else if (me.role === 'institutional_management') {
         attention.title = 'Latest submissions';
@@ -119,9 +141,12 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     }
 
     const statScope = scope.all ? {} : scope;
-    const [counts, list] = await Promise.all([
+    const [counts, list, typedCounts] = await Promise.all([
         statusCounts(statScope),
-        departmentFeedback ? Promise.resolve(null) : listFeedback(listOptions)
+        departmentFeedback ? Promise.resolve(null) : listFeedback(listOptions),
+        me.role === 'faculty' && me.department_id
+            ? feedbackTypeStatusCounts(me.department_id)
+            : Promise.resolve([])
     ]);
 
     if (list) attention.rows = list.rows;
@@ -142,6 +167,13 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         facultySuggestionsTotal: facultySuggestions.total,
         submittedToAdmin: submittedToAdmin.rows,
         submittedToAdminTotal: submittedToAdmin.total,
+        recentAssignments,
+        recentStatusUpdates,
+        pendingConcernCount: typedCounts
+            .filter(row => row.feedback_type === 'Concern' && ['Pending', 'Assigned'].includes(row.status_name))
+            .reduce((sum, row) => sum + row.total, 0),
+        facultyInProgressCount: countOf('In Progress'),
+        facultyResolvedCount: countOf('Resolved'),
         cards: {
             total,
             pendingAssigned: countOf('Pending') + countOf('Assigned'),
@@ -161,7 +193,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     });
 });
 
-router.get('/profile', requireLogin, async (req, res) => {
+router.get('/profile', requireRole('faculty'), async (req, res) => {
     const [[profile]] = await db.query(
         `SELECT u.full_name, u.email, u.role, d.department_name
          FROM users u

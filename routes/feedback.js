@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const db = require('../config/db');
 const { requireLogin, requireRole } = require('../middleware/auth');
-const { DEPT_ROLES } = require('../lib/constants');
+const { DEPT_ROLES, FEEDBACK_TYPES } = require('../lib/constants');
 const { normalizeRef, parseId, safeReturn } = require('../lib/helpers');
 const { parseFilters, listFeedback, lookups } = require('../lib/feedbackQueries');
 
@@ -40,6 +40,7 @@ async function renderSubmitForm(res, { error = null, values = {} } = {}, status 
     const prefill = {
         submitter_name: '',
         submitter_email: '',
+        feedback_type: 'Feedback',
         ...values
     };
 
@@ -64,6 +65,7 @@ router.post('/submit', async (req, res) => {
         submitter_name: String(body.submitter_name || '').trim(),
         submitter_email: String(body.submitter_email || '').trim(),
         category_id: String(body.category_id || ''),
+        feedback_type: String(body.feedback_type || 'Feedback'),
         subject: String(body.subject || '').trim(),
         description: String(body.description || '').trim()
     };
@@ -71,8 +73,13 @@ router.post('/submit', async (req, res) => {
     const showError = (message) =>
         renderSubmitForm(res, { error: message, values }, 400);
 
-    if (!values.category_id || !values.subject || !values.description) {
-        return showError('Choose a category and complete the subject and details.');
+    if (
+        !values.category_id ||
+        !FEEDBACK_TYPES.includes(values.feedback_type) ||
+        !values.subject ||
+        !values.description
+    ) {
+        return showError('Choose a type and category, then complete the subject and details.');
     }
 
     if (values.subject.length > SUBJECT_MAX) {
@@ -126,23 +133,32 @@ router.post('/submit', async (req, res) => {
         const candidate = crypto.randomBytes(8).toString('hex').toUpperCase();
 
         try {
-            await db.query(
-                `INSERT INTO feedback
-                    (reference_code, submitter_name, submitter_email, is_anonymous,
-                     category_id, subject, description, status_id, submitted_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    candidate,
-                    name,
-                    email,
-                    isAnonymous ? 1 : 0,
-                    categoryId,
-                    values.subject,
-                    values.description,
-                    statusRows[0].id,
-                    submittedBy
-                ]
-            );
+            await db.withTransaction(async conn => {
+                const [insert] = await conn.query(
+                    `INSERT INTO feedback
+                        (reference_code, submitter_name, submitter_email, is_anonymous,
+                         category_id, feedback_type, subject, description, status_id, submitted_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        candidate,
+                        name,
+                        email,
+                        isAnonymous ? 1 : 0,
+                        categoryId,
+                        values.feedback_type,
+                        values.subject,
+                        values.description,
+                        statusRows[0].id,
+                        submittedBy
+                    ]
+                );
+                await conn.query(
+                    `INSERT INTO feedback_history
+                        (feedback_id, changed_by, old_status_id, new_status_id, remarks)
+                     VALUES (?, ?, NULL, ?, NULL)`,
+                    [insert.insertId, submittedBy, statusRows[0].id]
+                );
+            });
             referenceCode = candidate;
         } catch (err) {
             if (err.code !== 'ER_DUP_ENTRY') throw err;
@@ -203,6 +219,7 @@ router.get('/track', async (req, res) => {
             f.reference_code,
             f.subject,
             f.description,
+            f.feedback_type,
             f.created_at,
             f.status_id,
             c.category_name,
@@ -301,7 +318,6 @@ router.post('/track', (req, res) => {
 async function renderList(req, res, config) {
     const filters = parseFilters(req.query);
     const options = { ...filters };
-    let facultyCategoryAvailable = null;
 
     const lists = await lookups();
 
@@ -319,21 +335,6 @@ async function renderList(req, res, config) {
         options.departmentId = departmentId;
         options.department = null;
 
-        const facultyCategory = String(req.query.faculty_category || '');
-        const facultyCategoryPatterns = {
-            concern: /faculty.*concern|concern.*faculty/i,
-            suggestion: /faculty.*suggestion|suggestion.*faculty/i
-        };
-
-        if (facultyCategoryPatterns[facultyCategory]) {
-            const category = lists.categories.find(item =>
-                facultyCategoryPatterns[facultyCategory].test(item.category_name)
-            );
-
-            filters.facultyCategory = facultyCategory;
-            facultyCategoryAvailable = Boolean(category);
-            options.categoryId = category ? Number(category.id) : -1;
-        }
     }
 
     if (config.mode === 'mine') {
@@ -355,11 +356,10 @@ async function renderList(req, res, config) {
         if (filters.q) params.set('q', filters.q);
         if (filters.statusName) params.set('status_name', filters.statusName);
         else if (filters.statusId) params.set('status', filters.statusId);
-        if (filters.facultyCategory) {
-            params.set('faculty_category', filters.facultyCategory);
-        } else if (filters.categoryId) {
+        if (filters.categoryId) {
             params.set('category', filters.categoryId);
         }
+        if (filters.feedbackType) params.set('feedback_type', filters.feedbackType);
         if (filters.department && config.mode !== 'department') {
             params.set('department', filters.department);
         }
@@ -373,7 +373,7 @@ async function renderList(req, res, config) {
         filters.statusId ||
         filters.statusName ||
         filters.categoryId ||
-        filters.facultyCategory ||
+        filters.feedbackType ||
         (filters.department && config.mode !== 'department')
     );
 
@@ -383,7 +383,6 @@ async function renderList(req, res, config) {
         ...lists,
         filters,
         filtersActive,
-        facultyCategoryAvailable,
         pageUrl
     });
 }
@@ -410,22 +409,36 @@ router.get('/management', requireRole('institutional_management', 'admin'), (req
     })
 );
 
-router.get('/department-inbox', requireRole(...DEPT_ROLES), (req, res) =>
-    renderList(req, res, {
+router.get('/department-inbox', requireRole(...DEPT_ROLES), (req, res) => {
+    const filters = parseFilters(req.query);
+    const awaitingAdminReview = filters.statusName === 'Awaiting Admin Review';
+    const typeTitle = filters.feedbackType === 'Concern'
+        ? 'Faculty Concerns'
+        : filters.feedbackType === 'Suggestion'
+            ? 'Faculty Suggestions'
+            : null;
+    const pageTitle = typeTitle ||
+        (awaitingAdminReview
+            ? 'Submitted to Admin'
+            : filters.statusName || (req.session.user.role === 'faculty' ? 'Assigned Feedback' : 'Inbox'));
+    const intro = filters.feedbackType === 'Concern'
+        ? 'Concern submissions assigned to your department.'
+        : filters.feedbackType === 'Suggestion'
+            ? 'Suggestion submissions assigned to your department.'
+            : awaitingAdminReview
+                ? 'Department action reports currently awaiting administrator review.'
+                : 'Feedback assigned to your department. Open one to update its status or leave a note.';
+
+    return renderList(req, res, {
         mode: 'department',
         basePath: '/feedback/department-inbox',
-        pageTitle: req.query.faculty_category === 'concern'
-            ? 'Faculty Concerns'
-            : req.query.faculty_category === 'suggestion'
-                ? 'Faculty Suggestions'
-                : req.query.status_name
-                    ? String(req.query.status_name)
-                    : 'Inbox',
-        intro: 'Feedback assigned to your department. Open one to update its status or leave a note.',
+        pageTitle,
+        intro,
         canAssign: false,
-        showDepartmentFilter: false
-    })
-);
+        showDepartmentFilter: false,
+        showFeedbackTypeFilter: true
+    });
+});
 
 router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) => {
     const departmentId = req.session.user.department_id;
@@ -444,6 +457,7 @@ router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) =
             f.reference_code,
             f.subject,
             f.created_at,
+            f.feedback_type,
             s.status_name AS current_status,
             (
                 SELECT old_status.status_name
@@ -498,7 +512,87 @@ router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) =
         [...DEPT_ROLES, departmentId, departmentId]
     );
 
-    res.render('department-history', { rows });
+    const historyByFeedback = new Map();
+    if (rows.length) {
+        const ids = rows.map(row => row.id);
+        const [[statusEvents], [assignmentEvents]] = await Promise.all([
+            db.query(
+                `SELECT
+                    fh.feedback_id,
+                    fh.changed_at,
+                    fh.remarks,
+                    os.status_name AS old_status,
+                    ns.status_name AS new_status,
+                    u.full_name AS changed_by,
+                    u.role AS changed_by_role,
+                    u.department_id AS changed_by_department
+                 FROM feedback_history fh
+                 LEFT JOIN statuses os ON os.id = fh.old_status_id
+                 JOIN statuses ns ON ns.id = fh.new_status_id
+                 LEFT JOIN users u ON u.id = fh.changed_by
+                 WHERE fh.feedback_id IN (?)
+                   AND (u.role = 'admin' OR u.department_id = ? OR u.id IS NULL)
+                 ORDER BY fh.changed_at DESC, fh.id DESC`,
+                [ids, departmentId]
+            ),
+            db.query(
+                `SELECT
+                    ah.feedback_id,
+                    ah.changed_at,
+                    od.department_name AS old_department,
+                    nd.department_name AS new_department,
+                    u.full_name AS changed_by
+                 FROM feedback_assignment_history ah
+                 LEFT JOIN departments od ON od.id = ah.old_department_id
+                 JOIN departments nd ON nd.id = ah.new_department_id
+                 LEFT JOIN users u ON u.id = ah.changed_by
+                 WHERE ah.feedback_id IN (?)
+                   AND (ah.old_department_id = ? OR ah.new_department_id = ?)
+                 ORDER BY ah.changed_at DESC, ah.id DESC`,
+                [ids, departmentId, departmentId]
+            )
+        ]);
+
+        for (const row of rows) {
+            historyByFeedback.set(row.id, [{
+                at: row.created_at,
+                type: 'Submission',
+                summary: 'Submission received as Pending',
+                by: 'Submitter',
+                remarks: null
+            }]);
+        }
+        statusEvents.forEach(event => {
+            historyByFeedback.get(event.feedback_id).push({
+                at: event.changed_at,
+                type: event.old_status === event.new_status ? 'Note' : 'Status',
+                summary: event.old_status
+                    ? `${event.old_status} → ${event.new_status}`
+                    : `Submitted as ${event.new_status}`,
+                by: event.changed_by || 'System',
+                remarks: event.remarks
+            });
+        });
+        assignmentEvents.forEach(event => {
+            historyByFeedback.get(event.feedback_id).push({
+                at: event.changed_at,
+                type: 'Assignment',
+                summary: event.old_department
+                    ? `Reassigned from ${event.old_department} to ${event.new_department}`
+                    : `Assigned to ${event.new_department}`,
+                by: event.changed_by || 'Administrator',
+                remarks: null
+            });
+        });
+        historyByFeedback.forEach(events =>
+            events.sort((a, b) => new Date(b.at) - new Date(a.at))
+        );
+    }
+
+    res.render('department-history', {
+        rows,
+        historyByFeedback: Object.fromEntries(historyByFeedback)
+    });
 });
 
 router.get('/my-submissions', requireLogin, (req, res) =>
@@ -551,6 +645,7 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
             f.description,
             f.created_at,
             f.is_anonymous,
+            f.feedback_type,
             f.submitter_name,
             f.submitter_email,
             f.status_id,
@@ -613,8 +708,14 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
              LEFT JOIN departments od ON ah.old_department_id = od.id
              JOIN departments nd ON ah.new_department_id = nd.id
              LEFT JOIN users u ON ah.changed_by = u.id
-             WHERE ah.feedback_id = ?`,
-            [id]
+             WHERE ah.feedback_id = ?
+               AND (? = 0 OR ah.old_department_id = ? OR ah.new_department_id = ?)`,
+            [
+                id,
+                isDeptStaff(user) ? 1 : 0,
+                user.department_id || -1,
+                user.department_id || -1
+            ]
         ),
         lookups()
     ]);

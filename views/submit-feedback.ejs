@@ -34,6 +34,15 @@
         </div>
 
         <div class="field">
+            <label for="feedback_type">Submission type</label>
+            <select class="input" id="feedback_type" name="feedback_type" required>
+                <% ['Feedback', 'Concern', 'Suggestion'].forEach(type => { %>
+                    <option value="<%= type %>" <%= values.feedback_type === type ? 'selected' : '' %>><%= type %></option>
+                <% }) %>
+            </select>
+        </div>
+
+        <div class="field">
             <label for="category_id">Category</label>
             <select class="input" id="category_id" name="category_id" required>
                 <option value="">Choose a category</option>
@@ -56,7 +65,7 @@
         </div>
 
         <div class="actions">
-            <button type="submit" class="btn btn--primary btn--lg">Submit feedback</button>
+            <button type="submit" class="btn btn--primary btn--lg">Submit</button>
             <a href="/" class="btn btn--ghost btn--lg">Cancel</a>
         </div>
     </form>
