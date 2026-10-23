@@ -2437,7 +2437,218 @@ select.input {
         flex-direction: column;
         gap: 14px;
     }
+}
 
+/* ---------- Staff account management ---------- */
+
+    .staff-accounts {
+        grid-template-columns: minmax(0, 1fr) 360px;
+        gap: 22px;
+    }
+
+    .staff-accounts__list,
+    .staff-accounts__form-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgb(18 38 63 / 5%);
+    }
+
+    .staff-accounts__card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 24px;
+    }
+
+    .staff-accounts__card-head h2,
+    .staff-accounts__form-heading h2 {
+        margin: 0;
+    }
+
+    .staff-accounts__note {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.45;
+    }
+
+    .staff-accounts__count {
+        flex: none;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #f1f5f9;
+        color: var(--ink-soft);
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .staff-accounts__table-wrap {
+        border: 0;
+        border-top: 1px solid var(--line);
+        border-radius: 0 0 15px 15px;
+    }
+
+    .staff-accounts__table {
+        min-width: 1080px;
+    }
+
+    .staff-accounts__table th {
+        white-space: nowrap;
+    }
+
+    .staff-accounts__table td {
+        padding-block: 16px;
+    }
+
+    .staff-accounts__empty {
+        padding: 36px 20px !important;
+        color: var(--muted);
+        text-align: center;
+    }
+
+    .staff-accounts__badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .staff-accounts__badge--protected {
+        background: #e8f1ff;
+        color: #1d4ed8;
+    }
+
+    .staff-accounts__badge--unknown {
+        background: #eef1f4;
+        color: #566273;
+    }
+
+    .staff-accounts__actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-width: 270px;
+    }
+
+    .staff-accounts__actions form {
+        margin: 0;
+    }
+
+    .staff-accounts__action {
+        min-height: 32px;
+        padding: 5px 9px;
+        border-color: var(--line-strong);
+        background: var(--surface);
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+        white-space: nowrap;
+    }
+
+    .staff-accounts__action .icon {
+        flex: none;
+    }
+
+    .staff-accounts__action--edit {
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .staff-accounts__action--edit:hover {
+        background: #eff6ff;
+        border-color: #60a5fa;
+        color: #1e40af;
+    }
+
+    .staff-accounts__action--delete {
+        border-color: #fecaca;
+        color: #b91c1c;
+    }
+
+    .staff-accounts__action--delete:hover {
+        background: #fef2f2;
+        border-color: #f87171;
+        color: #991b1b;
+    }
+
+    .staff-accounts__action--status,
+    .staff-accounts__action:disabled {
+        cursor: not-allowed;
+        opacity: 0.72;
+    }
+
+    .staff-accounts__protection {
+        flex-basis: 100%;
+        color: var(--muted);
+        font-size: 0.72rem;
+        line-height: 1.35;
+    }
+
+    .staff-accounts__form-card {
+        padding: 24px;
+    }
+
+    .staff-accounts__form-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 22px;
+    }
+
+    .staff-accounts__eyebrow {
+        margin: 0 0 6px;
+        color: var(--primary);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+    }
+
+    .staff-accounts__cancel {
+        color: var(--primary);
+        font-size: 0.86rem;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .staff-accounts__cancel:hover {
+        text-decoration: underline;
+    }
+
+    .staff-accounts__password-note {
+        margin: -4px 0 2px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.5;
+    }
+
+    .staff-accounts__submit {
+        margin-top: 6px;
+    }
+
+    @media (max-width: 1000px) {
+        .staff-accounts {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
+    @media (max-width: 600px) {
+        .staff-accounts__card-head {
+            align-items: flex-start;
+            padding: 18px;
+        }
+
+        .staff-accounts__form-card {
+            padding: 18px;
+        }
+    }
+
+@media (max-width: 650px) {
     .profile-grid {
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;

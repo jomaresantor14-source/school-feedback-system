@@ -2,8 +2,8 @@
 <%- include('partials/staff-open') %>
 
 <div class="page-head">
-    <h1>Staff accounts</h1>
-    <p class="muted">Create accounts for staff and see who has access.</p>
+    <h1>Staff Accounts</h1>
+    <p class="muted">Manage staff access and create accounts for your school.</p>
 </div>
 
 <% if (error) { %>
@@ -13,19 +13,72 @@
     <div class="alert alert--success" role="status"><%- icon('check', 18) %><span><%= success %></span></div>
 <% } %>
 
-<div class="detail detail--wide-side">
-    <section class="card card--flush">
-        <header class="card__head"><h2>Current accounts</h2></header>
-        <div class="table-wrap">
-            <table class="table">
-                <thead><tr><th>Name</th><th>Role</th><th>Department</th><th>Created</th></tr></thead>
+<div class="detail detail--wide-side staff-accounts">
+    <section class="card card--flush staff-accounts__list">
+        <header class="card__head staff-accounts__card-head">
+            <div>
+                <h2>Current Accounts</h2>
+                <p class="staff-accounts__note">Account status is not stored in the current database.</p>
+            </div>
+            <span class="staff-accounts__count"><%= staff.length %> <%= staff.length === 1 ? 'account' : 'accounts' %></span>
+        </header>
+        <div class="table-wrap staff-accounts__table-wrap">
+            <table class="table staff-accounts__table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Department</th>
+                        <th>Created</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    <% staff.forEach(person => { %>
+                    <% if (!staff.length) { %>
+                        <tr><td class="staff-accounts__empty" colspan="6">No staff accounts are available yet.</td></tr>
+                    <% } %>
+                    <% staff.forEach(person => {
+                        const protectedAccount = Number(person.id) === Number(primaryAdminId);
+                        const signedInAccount = Number(person.id) === Number(user.id);
+                    %>
                         <tr>
-                            <td><strong><%= person.full_name %></strong><span class="sub"><%= person.email %></span></td>
+                            <td>
+                                <strong><%= person.full_name %></strong>
+                                <span class="sub"><%= person.email %></span>
+                            </td>
                             <td><%= roleLabel(person.role) %></td>
                             <td><%= person.department_name || 'None' %></td>
                             <td class="nowrap"><%= fmtDate(person.created_at, false) %></td>
+                            <td>
+                                <span class="staff-accounts__badge <%= protectedAccount ? 'staff-accounts__badge--protected' : 'staff-accounts__badge--unknown' %>">
+                                    <%= protectedAccount ? 'Protected' : 'Not tracked' %>
+                                </span>
+                            </td>
+                            <td>
+                                <div class="staff-accounts__actions">
+                                    <% if (protectedAccount) { %>
+                                        <button class="btn btn--sm staff-accounts__action" type="button" disabled aria-label="Edit protected account"><%- icon('edit', 15) %>Edit</button>
+                                        <button class="btn btn--sm staff-accounts__action staff-accounts__action--status" type="button" disabled>Status unavailable</button>
+                                        <button class="btn btn--sm staff-accounts__action staff-accounts__action--delete" type="button" disabled><%- icon('trash', 15) %>Delete</button>
+                                        <span class="staff-accounts__protection">Primary System Administrator protected</span>
+                                    <% } else { %>
+                                        <a class="btn btn--sm staff-accounts__action staff-accounts__action--edit" href="/auth/create-staff?edit=<%= person.id %>"><%- icon('edit', 15) %>Edit</a>
+                                        <button class="btn btn--sm staff-accounts__action staff-accounts__action--status" type="button" disabled title="The database does not store account status">Status unavailable</button>
+                                        <% if (signedInAccount) { %>
+                                            <button class="btn btn--sm staff-accounts__action staff-accounts__action--delete" type="button" disabled aria-label="Cannot delete your own account"><%- icon('trash', 15) %>Delete</button>
+                                            <span class="staff-accounts__protection">You cannot delete the account you are signed in with</span>
+                                        <% } else { %>
+                                            <form action="/auth/create-staff" method="POST">
+                                                <%- include('partials/csrf') %>
+                                                <input type="hidden" name="account_action" value="delete">
+                                                <input type="hidden" name="account_id" value="<%= person.id %>">
+                                                <button class="btn btn--sm staff-accounts__action staff-accounts__action--delete" type="submit" data-confirm="Delete this account? Feedback submissions and history will be preserved; accounts referenced by them cannot be deleted."><%- icon('trash', 15) %>Delete</button>
+                                            </form>
+                                        <% } %>
+                                    <% } %>
+                                </div>
+                            </td>
                         </tr>
                     <% }) %>
                 </tbody>
@@ -33,10 +86,22 @@
         </div>
     </section>
 
-    <section class="card">
-        <h2>New account</h2>
+    <section class="card staff-accounts__form-card">
+        <div class="staff-accounts__form-heading">
+            <div>
+                <p class="staff-accounts__eyebrow"><%= editAccount ? 'ACCOUNT DETAILS' : 'GET STARTED' %></p>
+                <h2><%= editAccount ? 'Edit account' : 'New Account' %></h2>
+            </div>
+            <% if (editAccount) { %>
+                <a class="staff-accounts__cancel" href="/auth/create-staff">Cancel</a>
+            <% } %>
+        </div>
         <form class="form" action="/auth/create-staff" method="POST">
             <%- include('partials/csrf') %>
+            <input type="hidden" name="account_action" value="<%= editAccount ? 'edit' : 'create' %>">
+            <% if (editAccount) { %>
+                <input type="hidden" name="account_id" value="<%= editAccount.id %>">
+            <% } %>
 
             <div class="field">
                 <label for="full_name">Full name</label>
@@ -48,11 +113,15 @@
                 <input class="input" type="email" id="email" name="email" required maxlength="150" value="<%= values.email || '' %>">
             </div>
 
-            <div class="field">
-                <label for="password">Temporary password</label>
-                <input class="input" type="password" id="password" name="password" required minlength="12" autocomplete="new-password">
-                <p class="hint">At least 12 characters. Ask the person to keep it private.</p>
-            </div>
+            <% if (!editAccount) { %>
+                <div class="field">
+                    <label for="password">Temporary password</label>
+                    <input class="input" type="password" id="password" name="password" required minlength="12" autocomplete="new-password">
+                    <p class="hint">At least 12 characters. Ask the person to keep it private.</p>
+                </div>
+            <% } else { %>
+                <p class="staff-accounts__password-note">The existing password and login credentials will not be changed.</p>
+            <% } %>
 
             <div class="field">
                 <label for="role">Role</label>
@@ -75,7 +144,10 @@
                 <p class="hint">Required for administrative staff, department heads, guidance staff and IT staff.</p>
             </div>
 
-            <button type="submit" class="btn btn--primary btn--block">Create account</button>
+            <button type="submit" class="btn btn--primary btn--block staff-accounts__submit">
+                <%- icon(editAccount ? 'check' : 'plus', 17) %>
+                <%= editAccount ? 'Save changes' : 'Create account' %>
+            </button>
         </form>
     </section>
 </div>
