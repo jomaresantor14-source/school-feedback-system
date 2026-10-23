@@ -57,21 +57,23 @@ router.get('/dashboard', requireLogin, async (req, res) => {
 
     const scope = scopeFor(req.session.user);
     const { statuses } = await lookups();
-    const assigned = statuses.find(s => s.status_name === 'Assigned');
 
     // The list shown under the numbers depends on the role.
     let attention = { title: 'Latest submissions', rows: [], link: null };
     const listOptions = { perPage: 6 };
+    let departmentFeedback = null;
 
     if (me.role === 'admin') {
         attention.title = 'Waiting for a department';
         attention.link = { href: '/feedback/admin?department=unassigned', text: 'See all unassigned' };
         listOptions.department = 'unassigned';
     } else if (DEPT_ROLES.includes(me.role)) {
-        attention.title = 'Assigned to your department';
-        attention.link = { href: '/feedback/department-inbox', text: 'Open department inbox' };
-        listOptions.departmentId = scope.departmentId;
-        listOptions.statusId = assigned ? assigned.id : null;
+        const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
+        departmentFeedback = await listFeedback({
+            departmentId: scope.departmentId,
+            page,
+            perPage: 15
+        });
     } else if (me.role === 'institutional_management') {
         attention.title = 'Latest submissions';
         attention.link = { href: '/feedback/management', text: 'Open overview' };
@@ -84,26 +86,34 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     const statScope = scope.all ? {} : scope;
     const [counts, list] = await Promise.all([
         statusCounts(statScope),
-        listFeedback(listOptions)
+        departmentFeedback ? Promise.resolve(null) : listFeedback(listOptions)
     ]);
 
-    attention.rows = list.rows;
+    if (list) attention.rows = list.rows;
 
     const countOf = name => (counts.find(c => c.status_name === name) || {}).total || 0;
     const total = counts.reduce((sum, c) => sum + c.total, 0);
+    const departmentPageUrl = page => page > 1 ? `/staff/dashboard?page=${page}` : '/staff/dashboard';
 
     res.render('staff-dashboard', {
         me: { ...me, department_name: me.department_name },
         scopeLabel: scope.label,
+        departmentDashboard: DEPT_ROLES.includes(me.role),
+        departmentFeedback,
+        departmentPageUrl,
         cards: {
             total,
+            pendingAssigned: countOf('Pending') + countOf('Assigned'),
+            underReview: countOf('Under Review'),
+            inProgress: countOf('In Progress'),
+            awaitingAdminReview: countOf('Awaiting Admin Review'),
+            resolved: countOf('Resolved'),
             pending: countOf('Pending'),
             active:
                 countOf('Assigned') +
                 countOf('Under Review') +
                 countOf('In Progress') +
-                countOf('Awaiting Admin Review'),
-            resolved: countOf('Resolved')
+                countOf('Awaiting Admin Review')
         },
         attention,
         noDepartment: DEPT_ROLES.includes(me.role) && !me.department_id

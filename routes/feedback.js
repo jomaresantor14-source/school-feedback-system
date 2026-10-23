@@ -235,18 +235,49 @@ router.get('/track', async (req, res) => {
                 fh.id,
                 fh.old_status_id,
                 fh.new_status_id,
-                fh.remarks,
+                CASE
+                    WHEN f.status_id = fh.new_status_id
+                         AND ns.status_name = 'Resolved'
+                         AND changed_by.role = 'admin'
+                    THEN fh.remarks
+                    ELSE NULL
+                END AS remarks,
                 fh.changed_at,
                 ns.status_name AS new_status
              FROM feedback_history fh
              JOIN statuses ns ON fh.new_status_id = ns.id
              JOIN feedback f ON fh.feedback_id = f.id
+             LEFT JOIN users changed_by ON changed_by.id = fh.changed_by
              WHERE f.reference_code = ?
+               AND (
+                   fh.old_status_id IS NULL OR fh.old_status_id <> fh.new_status_id OR
+                   (
+                       f.status_id = fh.new_status_id
+                       AND ns.status_name = 'Resolved'
+                       AND changed_by.role = 'admin'
+                       AND fh.remarks IS NOT NULL
+                   )
+               )
              ORDER BY fh.changed_at ASC, fh.id ASC`,
             [code]
         ),
         db.query('SELECT id, status_name FROM statuses ORDER BY id ASC')
     ]);
+
+    const statusOrder = [
+        'Pending',
+        'Assigned',
+        'Under Review',
+        'In Progress',
+        'Awaiting Admin Review',
+        'Resolved'
+    ];
+    steps.sort((a, b) => {
+        const aIndex = statusOrder.indexOf(a.status_name);
+        const bIndex = statusOrder.indexOf(b.status_name);
+        return (aIndex < 0 ? statusOrder.length : aIndex) -
+            (bIndex < 0 ? statusOrder.length : bIndex);
+    });
 
     res.render('track-feedback', {
         code: raw,
@@ -361,12 +392,88 @@ router.get('/department-inbox', requireRole(...DEPT_ROLES), (req, res) =>
     renderList(req, res, {
         mode: 'department',
         basePath: '/feedback/department-inbox',
-        pageTitle: 'Department inbox',
+        pageTitle: req.query.status_name
+            ? String(req.query.status_name)
+            : 'Inbox',
         intro: 'Feedback assigned to your department. Open one to update its status or leave a note.',
         canAssign: false,
         showDepartmentFilter: false
     })
 );
+
+router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) => {
+    const departmentId = req.session.user.department_id;
+
+    if (!departmentId) {
+        return res.status(403).render('error', {
+            code: 403,
+            title: 'No department assigned',
+            message: 'Your account has no department yet. Ask an administrator to assign one.'
+        });
+    }
+
+    const [rows] = await db.query(
+        `SELECT
+            f.id,
+            f.reference_code,
+            f.subject,
+            f.created_at,
+            s.status_name AS current_status,
+            (
+                SELECT old_status.status_name
+                FROM feedback_history fh
+                LEFT JOIN statuses old_status ON old_status.id = fh.old_status_id
+                WHERE fh.feedback_id = f.id
+                  AND fh.old_status_id IS NOT NULL
+                  AND fh.old_status_id <> fh.new_status_id
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS previous_status,
+            GREATEST(
+                COALESCE(
+                    (SELECT MAX(fh.changed_at) FROM feedback_history fh WHERE fh.feedback_id = f.id),
+                    f.created_at
+                ),
+                COALESCE(
+                    (SELECT MAX(ah.changed_at) FROM feedback_assignment_history ah WHERE ah.feedback_id = f.id),
+                    f.created_at
+                )
+            ) AS last_updated_at,
+            (
+                SELECT fh.remarks
+                FROM feedback_history fh
+                JOIN users changed_by ON changed_by.id = fh.changed_by
+                WHERE fh.feedback_id = f.id
+                  AND changed_by.role IN (${DEPT_ROLES.map(() => '?').join(', ')})
+                  AND changed_by.department_id = ?
+                  AND fh.remarks IS NOT NULL
+                  AND TRIM(fh.remarks) != ''
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS department_remarks,
+            (
+                SELECT fh.remarks
+                FROM feedback_history fh
+                JOIN users changed_by ON changed_by.id = fh.changed_by
+                JOIN statuses new_status ON new_status.id = fh.new_status_id
+                WHERE fh.feedback_id = f.id
+                  AND changed_by.role = 'admin'
+                  AND f.status_id = fh.new_status_id
+                  AND new_status.status_name = 'Resolved'
+                  AND fh.remarks IS NOT NULL
+                  AND TRIM(fh.remarks) != ''
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS admin_response
+         FROM feedback f
+         JOIN statuses s ON s.id = f.status_id
+         WHERE f.assigned_department_id = ?
+         ORDER BY last_updated_at DESC, f.id DESC`,
+        [...DEPT_ROLES, departmentId, departmentId]
+    );
+
+    res.render('department-history', { rows });
+});
 
 router.get('/my-submissions', requireLogin, (req, res) =>
     renderList(req, res, {
@@ -461,8 +568,13 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
              LEFT JOIN statuses os ON fh.old_status_id = os.id
              JOIN statuses ns ON fh.new_status_id = ns.id
              LEFT JOIN users u ON fh.changed_by = u.id
-             WHERE fh.feedback_id = ?`,
-            [id]
+             WHERE fh.feedback_id = ?
+               AND (? = 0 OR u.role = 'admin' OR u.department_id = ?)`,
+            [
+                id,
+                isDeptStaff(user) ? 1 : 0,
+                user.department_id || -1
+            ]
         ),
         db.query(
             `SELECT
@@ -575,7 +687,8 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
              FROM feedback f
              JOIN statuses s ON s.id = f.status_id
              WHERE f.id = ?
-             LIMIT 1`,
+             LIMIT 1
+             FOR UPDATE`,
             [id]
         );
 
@@ -614,15 +727,35 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
             return { type: 'forbidden_resolved' };
         }
 
-        if (isAdmin && newStatus === 'Resolved' && oldStatus !== 'Awaiting Admin Review') {
-            return { type: 'must_review_first' };
-        }
-
-        if (
-            isDepartmentStaff &&
-            !['Under Review', 'In Progress', 'Awaiting Admin Review'].includes(newStatus)
-        ) {
-            return { type: 'invalid_transition' };
+        if (isDepartmentStaff) {
+            const transitions = {
+                Pending: ['Under Review'],
+                Assigned: ['Under Review'],
+                'Under Review': ['In Progress'],
+                'In Progress': ['Awaiting Admin Review'],
+                'Awaiting Admin Review': []
+            };
+            const allowed = transitions[oldStatus] || [];
+            if (newStatus !== oldStatus && !allowed.includes(newStatus)) {
+                return { type: 'invalid_transition' };
+            }
+            if (newStatus === 'Awaiting Admin Review' && !remarks) {
+                return { type: 'resolution_summary_required' };
+            }
+        } else if (isAdmin) {
+            const isReview = oldStatus === 'Awaiting Admin Review';
+            const allowed = isReview
+                ? ['Resolved', 'In Progress', 'Under Review']
+                : [];
+            if (
+                (newStatus === 'Resolved' && !isReview) ||
+                (newStatus !== oldStatus && !allowed.includes(newStatus))
+            ) {
+                return { type: 'must_review_first' };
+            }
+            if (newStatus === 'Resolved' && !remarks) {
+                return { type: 'response_required' };
+            }
         }
 
         if (oldStatusId === newStatusId && !remarks) {
@@ -658,6 +791,12 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
             break;
         case 'must_review_first':
             flash(req, 'error', 'The department must submit this case for final review before it can be resolved.');
+            break;
+        case 'response_required':
+            flash(req, 'error', 'Add the administrator response before approving this resolution.');
+            break;
+        case 'resolution_summary_required':
+            flash(req, 'error', 'Add a department action and resolution summary before submitting for final review.');
             break;
         case 'invalid_transition':
             flash(req, 'error', 'Choose a status allowed for your department role.');
@@ -695,7 +834,7 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
 
     const outcome = await db.withTransaction(async (conn) => {
         const [rows] = await conn.query(
-            'SELECT assigned_department_id FROM feedback WHERE id = ?',
+            'SELECT assigned_department_id, status_id FROM feedback WHERE id = ? LIMIT 1 FOR UPDATE',
             [id]
         );
 
@@ -704,7 +843,7 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         }
 
         const [departmentRows] = await conn.query(
-            'SELECT id, department_name FROM departments WHERE id = ?',
+            'SELECT id, department_name FROM departments WHERE id = ? LIMIT 1',
             [departmentId]
         );
 
@@ -718,19 +857,14 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
             return { type: 'unchanged', name: departmentRows[0].department_name };
         }
 
-        const [pendingRows] = await conn.query(
-            `SELECT id FROM statuses
-             WHERE status_name = 'Pending'
-             LIMIT 1`
+        const [statusRows] = await conn.query(
+            'SELECT id, status_name FROM statuses WHERE status_name IN (?, ?)',
+            ['Pending', 'Assigned']
         );
+        const pendingStatus = statusRows.find(status => status.status_name === 'Pending');
+        const assignedStatus = statusRows.find(status => status.status_name === 'Assigned');
 
-        const [assignedRows] = await conn.query(
-            `SELECT id FROM statuses
-             WHERE status_name = 'Assigned'
-             LIMIT 1`
-        );
-
-        if (assignedRows.length === 0) {
+        if (!assignedStatus) {
             throw new Error('Assigned status is missing from the statuses table.');
         }
 
@@ -744,11 +878,23 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
              WHERE id = ?`,
             [
                 departmentId,
-                pendingRows.length ? pendingRows[0].id : -1,
-                assignedRows[0].id,
+                pendingStatus ? pendingStatus.id : -1,
+                assignedStatus.id,
                 id
             ]
         );
+
+        if (
+            pendingStatus &&
+            Number(rows[0].status_id) === Number(pendingStatus.id)
+        ) {
+            await conn.query(
+                `INSERT INTO feedback_history
+                    (feedback_id, changed_by, old_status_id, new_status_id, remarks)
+                 VALUES (?, ?, ?, ?, NULL)`,
+                [id, user.id, pendingStatus.id, assignedStatus.id]
+            );
+        }
 
         await conn.query(
             `INSERT INTO feedback_assignment_history

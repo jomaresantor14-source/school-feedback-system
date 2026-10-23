@@ -72,10 +72,13 @@
                 <thead>
                     <tr>
                         <th>Subject</th>
+                        <th>Reference</th>
                         <th>Category</th>
                         <th>Status</th>
                         <th>Department</th>
                         <th>Submitted</th>
+                        <% if (mode === 'department') { %><th>Last updated</th><th>Department note</th><% } %>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -83,7 +86,11 @@
                         <tr>
                             <td>
                                 <a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a>
-                                <span class="sub"><%= formatRef(item.reference_code) %><%= item.is_anonymous ? ', anonymous' : '' %></span>
+                                <span class="sub"><%= item.description.slice(0, 120) %><%= item.description.length > 120 ? '…' : '' %></span>
+                            </td>
+                            <td>
+                                <%= formatRef(item.reference_code) %>
+                                <% if (item.is_anonymous) { %><span class="sub">Anonymous</span><% } %>
                             </td>
                             <td><%= item.category_name %></td>
                             <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
@@ -106,6 +113,11 @@
                                 <% } %>
                             </td>
                             <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
+                            <% if (mode === 'department') { %>
+                                <td class="nowrap"><%= fmtDate(item.last_updated_at || item.created_at, false) %></td>
+                                <td><%= item.latest_remarks || '—' %></td>
+                            <% } %>
+                            <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
                         </tr>
                     <% }) %>
                 </tbody>

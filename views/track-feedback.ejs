@@ -54,12 +54,11 @@
 
             <h3>Updates</h3>
             <ol class="timeline">
-                <% history.slice().reverse().forEach(item => {
-                    const isNote = item.old_status_id === item.new_status_id; %>
+                <% history.slice().reverse().forEach(item => { %>
                     <li class="timeline__item">
                         <span class="timeline__dot timeline__dot--<%= statusClass(item.new_status) %>"></span>
                         <div>
-                            <p class="timeline__title"><%= isNote ? 'Note from staff' : 'Status changed to ' + item.new_status %></p>
+                            <p class="timeline__title"><%= item.remarks ? 'Final response from administrator' : 'Status changed to ' + item.new_status %></p>
                             <p class="timeline__meta"><%= fmtDate(item.changed_at) %></p>
                             <% if (item.remarks) { %><p class="timeline__note"><%= item.remarks %></p><% } %>
                         </div>

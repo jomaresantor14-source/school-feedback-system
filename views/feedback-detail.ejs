@@ -58,14 +58,30 @@
                         <select class="input" id="status_id" name="status_id" required>
                             <%
                                 const isAdmin = user.role === 'admin';
-                                const availableStatuses = isAdmin
-                                    ? statuses.filter(s =>
-                                        ['Pending', 'Assigned', 'Under Review', 'In Progress',
-                                         'Awaiting Admin Review', 'Resolved'].includes(s.status_name)
-                                      )
-                                    : statuses.filter(s =>
-                                        ['Under Review', 'In Progress', 'Awaiting Admin Review'].includes(s.status_name)
-                                      );
+                                let allowedStatusNames = [feedback.status_name];
+                                if (isAdmin && feedback.status_name === 'Awaiting Admin Review') {
+                                    allowedStatusNames = [
+                                        'Awaiting Admin Review',
+                                        'Under Review',
+                                        'In Progress',
+                                        'Resolved'
+                                    ];
+                                } else if (!isAdmin) {
+                                    const transitions = {
+                                        Pending: ['Under Review'],
+                                        Assigned: ['Under Review'],
+                                        'Under Review': ['Under Review', 'In Progress'],
+                                        'In Progress': ['In Progress', 'Awaiting Admin Review'],
+                                        'Awaiting Admin Review': ['Awaiting Admin Review']
+                                    };
+                                    allowedStatusNames = transitions[feedback.status_name] || [];
+                                    if (!allowedStatusNames.includes(feedback.status_name)) {
+                                        allowedStatusNames.unshift(feedback.status_name);
+                                    }
+                                }
+                                const availableStatuses = statuses.filter(s =>
+                                    allowedStatusNames.includes(s.status_name)
+                                );
                             %>
                             <% availableStatuses.forEach(s => { %>
                                 <option
@@ -77,9 +93,9 @@
                         </select>
                     </div>
                     <div class="field">
-                        <label for="remarks">Note <span class="optional">(optional)</span></label>
-                        <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="What changed, or what is being done?"></textarea>
-                        <p class="hint">The person who submitted this can see your note on the tracking page.</p>
+                        <label for="remarks"><%= user.role === 'admin' && feedback.status_name === 'Awaiting Admin Review' ? 'Administrator response / return note' : 'Department action or note' %> <span class="optional">(optional unless submitting for review or approval)</span></label>
+                        <textarea class="input" id="remarks" name="remarks" rows="4" maxlength="1000" placeholder="What changed, or what is being done?"<%= (user.role === 'admin' && feedback.status_name === 'Awaiting Admin Review') || (!isAdmin && feedback.status_name === 'In Progress') ? ' required' : '' %>></textarea>
+                        <p class="hint">Internal notes are visible only to authorized staff. Only the administrator's final resolution response is shown on the public tracking page.</p>
                     </div>
                     <button type="submit" class="btn btn--primary btn--block">Save</button>
                 </form>

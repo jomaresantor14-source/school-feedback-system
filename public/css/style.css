@@ -423,6 +423,7 @@ select.input {
 /* ---------- Dashboard ---------- */
 
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-grid--department { grid-template-columns: repeat(3, 1fr); }
 .stat {
     display: grid; gap: 2px; padding: 18px 20px;
     background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--ink);
