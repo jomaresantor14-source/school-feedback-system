@@ -35,6 +35,8 @@ async function renderSubmitForm(res, { error = null, values = {} } = {}, status 
         'SELECT id, category_name FROM categories ORDER BY id ASC'
     );
 
+    // CHANGED: this form is for students and guests, so nothing is prefilled,
+    // even when a staff member is logged in.
     const prefill = {
         submitter_name: '',
         submitter_email: '',
@@ -111,6 +113,7 @@ router.post('/submit', async (req, res) => {
         throw new Error('The "Pending" status is missing from the statuses table.');
     }
 
+    // Anonymous submissions keep no personal details and are not linked to an account.
     const name = isAnonymous ? null : (values.submitter_name || null);
     const email = isAnonymous ? null : (values.submitter_email || null);
     const submittedBy =
@@ -118,6 +121,7 @@ router.post('/submit', async (req, res) => {
 
     let referenceCode = null;
 
+    // Try again in the very unlikely case two codes collide.
     for (let attempt = 0; attempt < 5 && !referenceCode; attempt += 1) {
         const candidate = crypto.randomBytes(8).toString('hex').toUpperCase();
 
@@ -149,6 +153,7 @@ router.post('/submit', async (req, res) => {
         throw new Error('Could not generate a unique reference code.');
     }
 
+    // Redirecting means a page refresh cannot send the same feedback twice.
     req.session.lastReference = referenceCode;
     req.session.save((err) => {
         if (err) {
@@ -230,18 +235,49 @@ router.get('/track', async (req, res) => {
                 fh.id,
                 fh.old_status_id,
                 fh.new_status_id,
-                fh.remarks,
+                CASE
+                    WHEN f.status_id = fh.new_status_id
+                         AND ns.status_name = 'Resolved'
+                         AND changed_by.role = 'admin'
+                    THEN fh.remarks
+                    ELSE NULL
+                END AS remarks,
                 fh.changed_at,
                 ns.status_name AS new_status
              FROM feedback_history fh
              JOIN statuses ns ON fh.new_status_id = ns.id
              JOIN feedback f ON fh.feedback_id = f.id
+             LEFT JOIN users changed_by ON changed_by.id = fh.changed_by
              WHERE f.reference_code = ?
+               AND (
+                   fh.old_status_id IS NULL OR fh.old_status_id <> fh.new_status_id OR
+                   (
+                       f.status_id = fh.new_status_id
+                       AND ns.status_name = 'Resolved'
+                       AND changed_by.role = 'admin'
+                       AND fh.remarks IS NOT NULL
+                   )
+               )
              ORDER BY fh.changed_at ASC, fh.id ASC`,
             [code]
         ),
         db.query('SELECT id, status_name FROM statuses ORDER BY id ASC')
     ]);
+
+    const statusOrder = [
+        'Pending',
+        'Assigned',
+        'Under Review',
+        'In Progress',
+        'Awaiting Admin Review',
+        'Resolved'
+    ];
+    steps.sort((a, b) => {
+        const aIndex = statusOrder.indexOf(a.status_name);
+        const bIndex = statusOrder.indexOf(b.status_name);
+        return (aIndex < 0 ? statusOrder.length : aIndex) -
+            (bIndex < 0 ? statusOrder.length : bIndex);
+    });
 
     res.render('track-feedback', {
         code: raw,
@@ -252,10 +288,12 @@ router.get('/track', async (req, res) => {
     });
 });
 
+// Older bookmarks and forms may still post here.
 router.post('/track', (req, res) => {
     const code = String((req.body && req.body.reference_code) || '').trim();
     res.redirect(`/feedback/track?code=${encodeURIComponent(code)}`);
 });
+
 // ---------------------------------------------------------------
 // Lists for staff
 // ---------------------------------------------------------------
@@ -263,25 +301,9 @@ router.post('/track', (req, res) => {
 async function renderList(req, res, config) {
     const filters = parseFilters(req.query);
     const options = { ...filters };
-    const user = req.session.user;
-    const lists = await lookups();
-
-    const requestedStatusName = String(req.query.status_name || '').trim();
-
-    if (requestedStatusName) {
-        const matchingStatus = lists.statuses.find(
-            status =>
-                status.status_name.toLowerCase() ===
-                requestedStatusName.toLowerCase()
-        );
-
-        options.statusId = matchingStatus ? Number(matchingStatus.id) : -1;
-        filters.statusId = options.statusId;
-        filters.statusName = requestedStatusName;
-    }
 
     if (config.mode === 'department') {
-        const departmentId = Number(user.department_id) || 0;
+        const departmentId = req.session.user.department_id;
 
         if (!departmentId) {
             return res.status(403).render('error', {
@@ -293,60 +315,35 @@ async function renderList(req, res, config) {
 
         options.departmentId = departmentId;
         options.department = null;
-
-        const categoryFilter = String(req.query.category || '').trim().toLowerCase();
-
-        const categoryPatterns = {
-            faculty_concern: /faculty.*concern|concern.*faculty/i,
-            faculty_suggestion: /faculty.*suggestion|suggestion.*faculty/i
-        };
-
-        if (categoryPatterns[categoryFilter]) {
-            const matchingCategory = lists.categories.find(category =>
-                categoryPatterns[categoryFilter].test(
-                    String(category.category_name || '')
-                )
-            );
-
-            options.categoryId = matchingCategory
-                ? Number(matchingCategory.id)
-                : -1;
-
-            filters.categoryId = options.categoryId;
-            filters.categoryFilter = categoryFilter;
-        }
     }
 
     if (config.mode === 'mine') {
-        options.submittedBy = user.id;
+        options.submittedBy = req.session.user.id;
         options.department = null;
     }
 
-    const result = await listFeedback(options);
+    const [result, lists] = await Promise.all([
+        listFeedback(options),
+        lookups()
+    ]);
 
-    const pageUrl = page => {
+    if (filters.statusName) {
+        const selectedStatus = lists.statuses.find(
+            status => status.status_name === filters.statusName
+        );
+        filters.statusId = selectedStatus ? Number(selectedStatus.id) : null;
+    }
+
+    const pageUrl = (page) => {
         const params = new URLSearchParams();
-
         if (filters.q) params.set('q', filters.q);
-
-        if (filters.statusName) {
-            params.set('status_name', filters.statusName);
-        } else if (filters.statusId) {
-            params.set('status', filters.statusId);
-        }
-
-        if (filters.categoryFilter) {
-            params.set('category', filters.categoryFilter);
-        } else if (filters.categoryId) {
-            params.set('category', filters.categoryId);
-        }
-
+        if (filters.statusName) params.set('status_name', filters.statusName);
+        else if (filters.statusId) params.set('status', filters.statusId);
+        if (filters.categoryId) params.set('category', filters.categoryId);
         if (filters.department && config.mode !== 'department') {
             params.set('department', filters.department);
         }
-
         if (page > 1) params.set('page', page);
-
         const query = params.toString();
         return query ? `${config.basePath}?${query}` : config.basePath;
     };
@@ -359,7 +356,7 @@ async function renderList(req, res, config) {
         (filters.department && config.mode !== 'department')
     );
 
-    return res.render(config.view || 'feedback-list', {
+    res.render(config.view || 'feedback-list', {
         ...config,
         ...result,
         ...lists,
@@ -380,30 +377,103 @@ router.get('/admin', requireRole('admin'), (req, res) =>
     })
 );
 
-router.get(
-    '/management',
-    requireRole('institutional_management', 'admin'),
-    (req, res) =>
-        renderList(req, res, {
-            mode: 'management',
-            basePath: '/feedback/management',
-            pageTitle: 'School overview',
-            intro: 'A read-only view of every submission and where it stands.',
-            canAssign: false,
-            showDepartmentFilter: true
-        })
+router.get('/management', requireRole('institutional_management', 'admin'), (req, res) =>
+    renderList(req, res, {
+        mode: 'management',
+        basePath: '/feedback/management',
+        pageTitle: 'School overview',
+        intro: 'A read-only view of every submission and where it stands.',
+        canAssign: false,
+        showDepartmentFilter: true
+    })
 );
 
 router.get('/department-inbox', requireRole(...DEPT_ROLES), (req, res) =>
     renderList(req, res, {
         mode: 'department',
         basePath: '/feedback/department-inbox',
-        pageTitle: 'Department inbox',
+        pageTitle: req.query.status_name
+            ? String(req.query.status_name)
+            : 'Inbox',
         intro: 'Feedback assigned to your department. Open one to update its status or leave a note.',
         canAssign: false,
         showDepartmentFilter: false
     })
 );
+
+router.get('/department-history', requireRole(...DEPT_ROLES), async (req, res) => {
+    const departmentId = req.session.user.department_id;
+
+    if (!departmentId) {
+        return res.status(403).render('error', {
+            code: 403,
+            title: 'No department assigned',
+            message: 'Your account has no department yet. Ask an administrator to assign one.'
+        });
+    }
+
+    const [rows] = await db.query(
+        `SELECT
+            f.id,
+            f.reference_code,
+            f.subject,
+            f.created_at,
+            s.status_name AS current_status,
+            (
+                SELECT old_status.status_name
+                FROM feedback_history fh
+                LEFT JOIN statuses old_status ON old_status.id = fh.old_status_id
+                WHERE fh.feedback_id = f.id
+                  AND fh.old_status_id IS NOT NULL
+                  AND fh.old_status_id <> fh.new_status_id
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS previous_status,
+            GREATEST(
+                COALESCE(
+                    (SELECT MAX(fh.changed_at) FROM feedback_history fh WHERE fh.feedback_id = f.id),
+                    f.created_at
+                ),
+                COALESCE(
+                    (SELECT MAX(ah.changed_at) FROM feedback_assignment_history ah WHERE ah.feedback_id = f.id),
+                    f.created_at
+                )
+            ) AS last_updated_at,
+            (
+                SELECT fh.remarks
+                FROM feedback_history fh
+                JOIN users changed_by ON changed_by.id = fh.changed_by
+                WHERE fh.feedback_id = f.id
+                  AND changed_by.role IN (${DEPT_ROLES.map(() => '?').join(', ')})
+                  AND changed_by.department_id = ?
+                  AND fh.remarks IS NOT NULL
+                  AND TRIM(fh.remarks) != ''
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS department_remarks,
+            (
+                SELECT fh.remarks
+                FROM feedback_history fh
+                JOIN users changed_by ON changed_by.id = fh.changed_by
+                JOIN statuses new_status ON new_status.id = fh.new_status_id
+                WHERE fh.feedback_id = f.id
+                  AND changed_by.role = 'admin'
+                  AND f.status_id = fh.new_status_id
+                  AND new_status.status_name = 'Resolved'
+                  AND fh.remarks IS NOT NULL
+                  AND TRIM(fh.remarks) != ''
+                ORDER BY fh.changed_at DESC, fh.id DESC
+                LIMIT 1
+            ) AS admin_response
+         FROM feedback f
+         JOIN statuses s ON s.id = f.status_id
+         WHERE f.assigned_department_id = ?
+         ORDER BY last_updated_at DESC, f.id DESC`,
+        [...DEPT_ROLES, departmentId, departmentId]
+    );
+
+    res.render('department-history', { rows });
+});
 
 router.get('/my-submissions', requireLogin, (req, res) =>
     renderList(req, res, {
@@ -426,43 +496,23 @@ function isDeptStaff(user) {
 }
 
 function ownsFeedback(user, feedback) {
-    if (
+    return (
         user.role === 'admin' ||
-        user.role === 'institutional_management'
-    ) {
-        return true;
-    }
-
-    return Boolean(
-        isDeptStaff(user) &&
-        user.department_id &&
-        feedback.assigned_department_id !== null &&
-        Number(feedback.assigned_department_id) ===
-            Number(user.department_id)
+        user.role === 'institutional_management' ||
+        (isDeptStaff(user) &&
+            feedback.assigned_department_id !== null &&
+            Number(feedback.assigned_department_id) === Number(user.department_id))
     );
 }
 
 function backLinkFor(user) {
-    if (user.role === 'admin') {
-        return { href: '/feedback/admin', text: 'All feedback' };
-    }
-
-    if (user.role === 'institutional_management') {
-        return {
-            href: '/feedback/management',
-            text: 'School overview'
-        };
-    }
-
-    return {
-        href: '/feedback/department-inbox',
-        text: 'Department inbox'
-    };
+    if (user.role === 'admin') return { href: '/feedback/admin', text: 'All feedback' };
+    if (user.role === 'institutional_management') return { href: '/feedback/management', text: 'School overview' };
+    return { href: '/feedback/department-inbox', text: 'Department inbox' };
 }
 
 router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
     const id = parseId(req.params.id);
-
     if (!id) return notFound(res);
 
     const user = req.session.user;
@@ -518,10 +568,14 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
              LEFT JOIN statuses os ON fh.old_status_id = os.id
              JOIN statuses ns ON fh.new_status_id = ns.id
              LEFT JOIN users u ON fh.changed_by = u.id
-             WHERE fh.feedback_id = ?`,
-            [id]
+             WHERE fh.feedback_id = ?
+               AND (? = 0 OR u.role = 'admin' OR u.department_id = ?)`,
+            [
+                id,
+                isDeptStaff(user) ? 1 : 0,
+                user.department_id || -1
+            ]
         ),
-
         db.query(
             `SELECT
                 ah.id,
@@ -536,10 +590,10 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
              WHERE ah.feedback_id = ?`,
             [id]
         ),
-
         lookups()
     ]);
 
+    // One timeline: submission, department assignments, status changes and notes
     const events = [
         {
             kind: 'submitted',
@@ -553,8 +607,7 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
     ];
 
     statusHistory.forEach(item => {
-        const isNote =
-            Number(item.old_status_id) === Number(item.new_status_id);
+        const isNote = item.old_status_id === item.new_status_id;
 
         events.push({
             kind: isNote ? 'note' : 'status',
@@ -584,8 +637,7 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
     });
 
     events.sort((a, b) =>
-        (new Date(b.at).getTime() - new Date(a.at).getTime()) ||
-        (b.order - a.order)
+        (new Date(b.at).getTime() - new Date(a.at).getTime()) || (b.order - a.order)
     );
 
     let submitter = 'Anonymous';
@@ -597,11 +649,7 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
             feedback.account_name ||
             feedback.submitter_email ||
             'Name not provided';
-
-        submitterEmail =
-            feedback.submitter_email ||
-            feedback.account_email ||
-            null;
+        submitterEmail = feedback.submitter_email || feedback.account_email || null;
     }
 
     res.render('feedback-detail', {
@@ -616,156 +664,162 @@ router.get('/view/:id', requireRole(...MANAGE_ROLES), async (req, res) => {
         back: backLinkFor(user)
     });
 });
-// ---------------------------------------------------------------
+
 // Change the status and/or leave a note
-// ---------------------------------------------------------------
+router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!id) return notFound(res);
 
-router.post(
-    '/view/:id/status',
-    requireRole('admin', ...DEPT_ROLES),
-    async (req, res) => {
-        const id = parseId(req.params.id);
+    const user = req.session.user;
+    const body = req.body || {};
+    const newStatusId = parseId(body.status_id);
+    const remarks = String(body.remarks || '').trim().slice(0, REMARKS_MAX) || null;
+    const detailUrl = `/feedback/view/${id}`;
 
-        if (!id) return notFound(res);
-
-        const user = req.session.user;
-        const body = req.body || {};
-        const newStatusId = parseId(body.status_id);
-        const remarks =
-            String(body.remarks || '').trim().slice(0, REMARKS_MAX) || null;
-
-        const detailUrl = `/feedback/view/${id}`;
-
-        if (!newStatusId) {
-            flash(req, 'error', 'Choose a status.');
-            return res.redirect(detailUrl);
-        }
-
-        const outcome = await db.withTransaction(async conn => {
-            const [rows] = await conn.query(
-                `SELECT id, status_id, assigned_department_id
-                 FROM feedback
-                 WHERE id = ?`,
-                [id]
-            );
-
-            if (rows.length === 0 || !ownsFeedback(user, rows[0])) {
-                return { type: 'missing' };
-            }
-
-            const [statusRows] = await conn.query(
-                'SELECT id, status_name FROM statuses WHERE id = ?',
-                [newStatusId]
-            );
-
-            if (statusRows.length === 0) {
-                return { type: 'invalid' };
-            }
-
-            const oldStatusId = Number(rows[0].status_id);
-            const newStatusName = statusRows[0].status_name;
-
-            // Only Admin can mark feedback as Resolved.
-            if (
-                user.role !== 'admin' &&
-                newStatusName === 'Resolved'
-            ) {
-                return { type: 'forbidden' };
-            }
-
-            // Department staff may only use these workflow statuses.
-            const departmentAllowedStatuses = [
-                'Under Review',
-                'In Progress',
-                'Awaiting Admin Review'
-            ];
-
-            if (
-                user.role !== 'admin' &&
-                !departmentAllowedStatuses.includes(newStatusName)
-            ) {
-                return { type: 'forbidden' };
-            }
-
-            if (oldStatusId === Number(newStatusId) && !remarks) {
-                return { type: 'unchanged' };
-            }
-
-            if (oldStatusId !== Number(newStatusId)) {
-                await conn.query(
-                    'UPDATE feedback SET status_id = ? WHERE id = ?',
-                    [newStatusId, id]
-                );
-            }
-
-            await conn.query(
-                `INSERT INTO feedback_history
-                    (feedback_id, changed_by, old_status_id, new_status_id, remarks)
-                 VALUES (?, ?, ?, ?, ?)`,
-                [
-                    id,
-                    user.id,
-                    oldStatusId,
-                    newStatusId,
-                    remarks
-                ]
-            );
-
-            return {
-                type: oldStatusId === Number(newStatusId)
-                    ? 'note'
-                    : 'changed',
-                statusName: newStatusName
-            };
-        });
-
-        switch (outcome.type) {
-            case 'missing':
-                return notFound(res);
-
-            case 'invalid':
-                flash(req, 'error', 'That status does not exist.');
-                break;
-
-            case 'forbidden':
-                flash(
-                    req,
-                    'error',
-                    'Only Admin can resolve feedback. Department staff may use Under Review, In Progress, or Awaiting Admin Review.'
-                );
-                break;
-
-            case 'unchanged':
-                flash(
-                    req,
-                    'info',
-                    'Nothing to save. Change the status or add a note.'
-                );
-                break;
-
-            case 'note':
-                flash(req, 'success', 'Note added.');
-                break;
-
-            default:
-                flash(
-                    req,
-                    'success',
-                    `Status updated to ${outcome.statusName}.`
-                );
-        }
-
-        res.redirect(detailUrl);
+    if (!newStatusId) {
+        flash(req, 'error', 'Choose a status.');
+        return res.redirect(detailUrl);
     }
-);
 
-// ---------------------------------------------------------------
-// Assign or reassign a department. Admin only.
-// ---------------------------------------------------------------
+    const outcome = await db.withTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT f.id, f.status_id, f.assigned_department_id, s.status_name
+             FROM feedback f
+             JOIN statuses s ON s.id = f.status_id
+             WHERE f.id = ?
+             LIMIT 1
+             FOR UPDATE`,
+            [id]
+        );
 
+        if (rows.length === 0 || !ownsFeedback(user, rows[0])) {
+            return { type: 'missing' };
+        }
+
+        const feedback = rows[0];
+        const oldStatusId = feedback.status_id;
+        const oldStatus = feedback.status_name;
+
+        const [statusRows] = await conn.query(
+            'SELECT id, status_name FROM statuses WHERE id = ? LIMIT 1',
+            [newStatusId]
+        );
+
+        if (statusRows.length === 0) {
+            return { type: 'invalid' };
+        }
+
+        const newStatus = statusRows[0].status_name;
+        const isAdmin = user.role === 'admin';
+        const isDepartmentStaff = DEPT_ROLES.includes(user.role);
+
+        if (
+            isDepartmentStaff &&
+            (
+                !feedback.assigned_department_id ||
+                Number(feedback.assigned_department_id) !== Number(user.department_id)
+            )
+        ) {
+            return { type: 'forbidden' };
+        }
+
+        if (isDepartmentStaff && newStatus === 'Resolved') {
+            return { type: 'forbidden_resolved' };
+        }
+
+        if (isDepartmentStaff) {
+            const transitions = {
+                Pending: ['Under Review'],
+                Assigned: ['Under Review'],
+                'Under Review': ['In Progress'],
+                'In Progress': ['Awaiting Admin Review'],
+                'Awaiting Admin Review': []
+            };
+            const allowed = transitions[oldStatus] || [];
+            if (newStatus !== oldStatus && !allowed.includes(newStatus)) {
+                return { type: 'invalid_transition' };
+            }
+            if (newStatus === 'Awaiting Admin Review' && !remarks) {
+                return { type: 'resolution_summary_required' };
+            }
+        } else if (isAdmin) {
+            const isReview = oldStatus === 'Awaiting Admin Review';
+            const allowed = isReview
+                ? ['Resolved', 'In Progress', 'Under Review']
+                : [];
+            if (
+                (newStatus === 'Resolved' && !isReview) ||
+                (newStatus !== oldStatus && !allowed.includes(newStatus))
+            ) {
+                return { type: 'must_review_first' };
+            }
+            if (newStatus === 'Resolved' && !remarks) {
+                return { type: 'response_required' };
+            }
+        }
+
+        if (oldStatusId === newStatusId && !remarks) {
+            return { type: 'unchanged' };
+        }
+
+        if (oldStatusId !== newStatusId) {
+            await conn.query(
+                'UPDATE feedback SET status_id = ? WHERE id = ?',
+                [newStatusId, id]
+            );
+        }
+
+        await conn.query(
+            `INSERT INTO feedback_history
+                (feedback_id, changed_by, old_status_id, new_status_id, remarks)
+             VALUES (?, ?, ?, ?, ?)`,
+            [id, user.id, oldStatusId, newStatusId, remarks]
+        );
+
+        return {
+            type: oldStatusId === newStatusId ? 'note' : 'changed',
+            statusName: newStatus
+        };
+    });
+
+    switch (outcome.type) {
+        case 'missing':
+            return notFound(res);
+        case 'forbidden':
+        case 'forbidden_resolved':
+            flash(req, 'error', 'You are not allowed to make that status change.');
+            break;
+        case 'must_review_first':
+            flash(req, 'error', 'The department must submit this case for final review before it can be resolved.');
+            break;
+        case 'response_required':
+            flash(req, 'error', 'Add the administrator response before approving this resolution.');
+            break;
+        case 'resolution_summary_required':
+            flash(req, 'error', 'Add a department action and resolution summary before submitting for final review.');
+            break;
+        case 'invalid_transition':
+            flash(req, 'error', 'Choose a status allowed for your department role.');
+            break;
+        case 'invalid':
+            flash(req, 'error', 'That status does not exist.');
+            break;
+        case 'unchanged':
+            flash(req, 'info', 'Nothing to save. Change the status or add a note.');
+            break;
+        case 'note':
+            flash(req, 'success', 'Note added.');
+            break;
+        default:
+            flash(req, 'success', `Status updated to ${outcome.statusName}.`);
+    }
+
+    res.redirect(detailUrl);
+});
+
+// Assign (or reassign) a department. Admin only.
 router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
     const id = parseId(req.params.id);
-
     if (!id) return notFound(res);
 
     const user = req.session.user;
@@ -778,9 +832,9 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         return res.redirect(returnTo);
     }
 
-    const outcome = await db.withTransaction(async conn => {
+    const outcome = await db.withTransaction(async (conn) => {
         const [rows] = await conn.query(
-            'SELECT assigned_department_id FROM feedback WHERE id = ?',
+            'SELECT assigned_department_id, status_id FROM feedback WHERE id = ? LIMIT 1 FOR UPDATE',
             [id]
         );
 
@@ -789,7 +843,7 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
         }
 
         const [departmentRows] = await conn.query(
-            'SELECT id, department_name FROM departments WHERE id = ?',
+            'SELECT id, department_name FROM departments WHERE id = ? LIMIT 1',
             [departmentId]
         );
 
@@ -799,42 +853,60 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
 
         const oldDepartmentId = rows[0].assigned_department_id;
 
-        if (
-            oldDepartmentId !== null &&
-            Number(oldDepartmentId) === departmentId
-        ) {
-            return {
-                type: 'unchanged',
-                name: departmentRows[0].department_name
-            };
+        if (oldDepartmentId !== null && Number(oldDepartmentId) === departmentId) {
+            return { type: 'unchanged', name: departmentRows[0].department_name };
+        }
+
+        const [statusRows] = await conn.query(
+            'SELECT id, status_name FROM statuses WHERE status_name IN (?, ?)',
+            ['Pending', 'Assigned']
+        );
+        const pendingStatus = statusRows.find(status => status.status_name === 'Pending');
+        const assignedStatus = statusRows.find(status => status.status_name === 'Assigned');
+
+        if (!assignedStatus) {
+            throw new Error('Assigned status is missing from the statuses table.');
         }
 
         await conn.query(
-            'UPDATE feedback SET assigned_department_id = ? WHERE id = ?',
-            [departmentId, id]
+            `UPDATE feedback
+             SET assigned_department_id = ?,
+                 status_id = CASE
+                     WHEN status_id = ? THEN ?
+                     ELSE status_id
+                 END
+             WHERE id = ?`,
+            [
+                departmentId,
+                pendingStatus ? pendingStatus.id : -1,
+                assignedStatus.id,
+                id
+            ]
         );
+
+        if (
+            pendingStatus &&
+            Number(rows[0].status_id) === Number(pendingStatus.id)
+        ) {
+            await conn.query(
+                `INSERT INTO feedback_history
+                    (feedback_id, changed_by, old_status_id, new_status_id, remarks)
+                 VALUES (?, ?, ?, ?, NULL)`,
+                [id, user.id, pendingStatus.id, assignedStatus.id]
+            );
+        }
 
         await conn.query(
             `INSERT INTO feedback_assignment_history
                 (feedback_id, changed_by, old_department_id, new_department_id)
              VALUES (?, ?, ?, ?)`,
-            [
-                id,
-                user.id,
-                oldDepartmentId,
-                departmentId
-            ]
+            [id, user.id, oldDepartmentId, departmentId]
         );
 
-        return {
-            type: 'assigned',
-            name: departmentRows[0].department_name
-        };
+        return { type: 'assigned', name: departmentRows[0].department_name };
     });
 
-    if (outcome.type === 'missing') {
-        return notFound(res);
-    }
+    if (outcome.type === 'missing') return notFound(res);
 
     if (outcome.type === 'invalid') {
         flash(req, 'error', 'That department does not exist.');
@@ -855,11 +927,8 @@ router.get('/admin/:id/edit', requireRole('admin'), (req, res) =>
     res.redirect(`/feedback/view/${parseId(req.params.id) || ''}`)
 );
 
-router.get(
-    '/department-inbox/:id/history',
-    requireRole(...MANAGE_ROLES),
-    (req, res) =>
-        res.redirect(`/feedback/view/${parseId(req.params.id) || ''}`)
+router.get('/department-inbox/:id/history', requireRole(...MANAGE_ROLES), (req, res) =>
+    res.redirect(`/feedback/view/${parseId(req.params.id) || ''}`)
 );
 
 module.exports = router;

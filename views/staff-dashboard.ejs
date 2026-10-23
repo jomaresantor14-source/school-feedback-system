@@ -1,410 +1,119 @@
-
 <%- include('partials/head', { title: 'Dashboard' }) %>
 <%- include('partials/staff-open') %>
 
-<div class="staff-dashboard">
-
-    <div class="page-head page-head--row">
-        <div>
-            <h1>Welcome back, <%= firstName(me.full_name) %></h1>
-            <p class="muted">
-                <%= roleLabel(me.role) %><% if (me.department_name) { %>, <%= me.department_name %><% } %>
-            </p>
-        </div>
-
-        <% if (user.role === 'admin') { %>
-            <a class="btn btn--primary" href="/feedback/admin">
-                <%- icon('list', 16) %> Manage feedback
-            </a>
-        <% } else if (DEPT_ROLES.includes(user.role)) { %>
-            <a class="btn btn--primary" href="/feedback/department-inbox">
-                <%- icon('inbox', 16) %> Open inbox
-            </a>
-        <% } else { %>
-            <a class="btn btn--primary" href="/feedback/submit">
-                <%- icon('send', 16) %> Send feedback
-            </a>
-        <% } %>
+<div class="page-head page-head--row">
+    <div>
+        <h1>Welcome back, <%= firstName(me.full_name) %></h1>
+        <p class="muted">
+            <%= roleLabel(me.role) %><% if (me.department_name) { %>, <%= me.department_name %><% } %>
+        </p>
     </div>
-
-    <%- include('partials/flash') %>
-
-    <% if (noDepartment) { %>
-        <div class="alert alert--error" role="alert">
-            <%- icon('alert', 18) %>
-            <span>
-                Your account has no department yet, so no feedback can be assigned to you.
-                Ask an administrator to fix this.
-            </span>
-        </div>
-    <% } %>
-
-    <p class="section-note"><%= scopeLabel %></p>
-
-    <% if (user.role === 'faculty') { %>
-
-        <section class="stat-grid" aria-label="Faculty feedback summary">
-            <div class="stat">
-                <span class="stat__num"><%= cards.total %></span>
-                <span class="stat__label">Total Feedback</span>
-            </div>
-
-            <div class="stat stat--pending">
-                <span class="stat__num"><%= (facultyConcerns || []).length %></span>
-                <span class="stat__label">Faculty Concerns</span>
-            </div>
-
-            <div class="stat stat--progress">
-                <span class="stat__num"><%= (facultySuggestions || []).length %></span>
-                <span class="stat__label">Faculty Suggestions</span>
-            </div>
-
-            <div class="stat">
-                <span class="stat__num"><%= (submittedToAdmin || []).length %></span>
-                <span class="stat__label">Submitted to Admin</span>
-            </div>
-        </section>
-
-        <section class="card card--flush">
-            <header class="card__head">
-                <h2>Faculty Concerns</h2>
-            </header>
-
-            <% if (!facultyConcerns || facultyConcerns.length === 0) { %>
-                <p class="empty">No faculty concerns found.</p>
-            <% } else { %>
-                <div class="table-wrap">
-                    <table class="table table--list">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Reference Number</th>
-                                <th>Date Submitted</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% facultyConcerns.forEach(item => { %>
-                                <tr>
-                                    <td>
-                                        <a class="row-link"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            <%= item.subject %>
-                                        </a>
-                                    </td>
-                                    <td><%= item.category_name %></td>
-                                    <td>
-                                        <%- include('partials/status-badge', {
-                                            badgeStatus: item.status_name
-                                        }) %>
-                                    </td>
-                                    <td><%= formatRef(item.reference_code) %></td>
-                                    <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
-                                    <td>
-                                        <a class="btn btn--ghost btn--sm"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            Track
-                                        </a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-        </section>
-
-        <section class="card card--flush">
-            <header class="card__head">
-                <h2>Faculty Suggestions</h2>
-            </header>
-
-            <% if (!facultySuggestions || facultySuggestions.length === 0) { %>
-                <p class="empty">No faculty suggestions found.</p>
-            <% } else { %>
-                <div class="table-wrap">
-                    <table class="table table--list">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Reference Number</th>
-                                <th>Date Submitted</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% facultySuggestions.forEach(item => { %>
-                                <tr>
-                                    <td>
-                                        <a class="row-link"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            <%= item.subject %>
-                                        </a>
-                                    </td>
-                                    <td><%= item.category_name %></td>
-                                    <td>
-                                        <%- include('partials/status-badge', {
-                                            badgeStatus: item.status_name
-                                        }) %>
-                                    </td>
-                                    <td><%= formatRef(item.reference_code) %></td>
-                                    <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
-                                    <td>
-                                        <a class="btn btn--ghost btn--sm"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            Track
-                                        </a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-        </section>
-
-        <section class="card card--flush">
-            <header class="card__head">
-                <h2>Submitted to Admin</h2>
-            </header>
-
-            <% if (!submittedToAdmin || submittedToAdmin.length === 0) { %>
-                <p class="empty">No feedback has been submitted for admin review yet.</p>
-            <% } else { %>
-                <div class="table-wrap">
-                    <table class="table table--list">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Reference Number</th>
-                                <th>Date Submitted</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% submittedToAdmin.forEach(item => { %>
-                                <tr>
-                                    <td>
-                                        <a class="row-link"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            <%= item.subject %>
-                                        </a>
-                                    </td>
-                                    <td><%= item.category_name %></td>
-                                    <td>
-                                        <%- include('partials/status-badge', {
-                                            badgeStatus: item.status_name
-                                        }) %>
-                                    </td>
-                                    <td><%= formatRef(item.reference_code) %></td>
-                                    <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
-                                    <td>
-                                        <a class="btn btn--ghost btn--sm"
-                                           href="/feedback/track?code=<%= encodeURIComponent(item.reference_code) %>">
-                                            Track
-                                        </a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-        </section>
-
-    <% } else if (departmentDashboard) { %>
-
-        <section class="stat-grid stat-grid--department" aria-label="Department feedback summary">
-            <div class="stat">
-                <span class="stat__num"><%= cards.total %></span>
-                <span class="stat__label">Total Feedback</span>
-            </div>
-            <div class="stat stat--pending">
-                <span class="stat__num"><%= cards.pendingAssigned %></span>
-                <span class="stat__label">Pending / Assigned</span>
-            </div>
-            <div class="stat">
-                <span class="stat__num"><%= cards.underReview %></span>
-                <span class="stat__label">Under Review</span>
-            </div>
-            <div class="stat stat--progress">
-                <span class="stat__num"><%= cards.inProgress %></span>
-                <span class="stat__label">In Progress</span>
-            </div>
-            <div class="stat">
-                <span class="stat__num"><%= cards.awaitingAdminReview %></span>
-                <span class="stat__label">Awaiting Admin Review</span>
-            </div>
-            <div class="stat stat--resolved">
-                <span class="stat__num"><%= cards.resolved %></span>
-                <span class="stat__label">Resolved</span>
-            </div>
-        </section>
-
-        <section class="card card--flush">
-            <header class="card__head">
-                <h2>Feedback for <%= me.department_name || 'your department' %></h2>
-            </header>
-
-            <% if (!departmentFeedback || departmentFeedback.rows.length === 0) { %>
-                <p class="empty">No feedback is assigned to your department yet.</p>
-            <% } else { %>
-                <div class="table-wrap">
-                    <table class="table table--list">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Reference Number</th>
-                                <th>Date Submitted</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% departmentFeedback.rows.forEach(item => { %>
-                                <tr>
-                                    <td>
-                                        <a class="row-link" href="/feedback/view/<%= item.id %>">
-                                            <%= item.subject %>
-                                        </a>
-                                    </td>
-                                    <td><%= item.category_name %></td>
-                                    <td>
-                                        <%- include('partials/status-badge', {
-                                            badgeStatus: item.status_name
-                                        }) %>
-                                    </td>
-                                    <td><%= formatRef(item.reference_code) %></td>
-                                    <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
-                                    <td>
-                                        <a class="btn btn--ghost btn--sm"
-                                           href="/feedback/view/<%= item.id %>">
-                                            View Details
-                                        </a>
-                                    </td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-
-                <% if (departmentFeedback.pages > 1) { %>
-                    <nav class="pager" aria-label="Department feedback pages">
-                        <% if (departmentFeedback.page > 1) { %>
-                            <a class="btn btn--ghost btn--sm"
-                               href="<%= departmentPageUrl(departmentFeedback.page - 1) %>">
-                                Previous
-                            </a>
-                        <% } else { %>
-                            <span></span>
-                        <% } %>
-
-                        <span class="pager__info">
-                            Page <%= departmentFeedback.page %> of <%= departmentFeedback.pages %>
-                        </span>
-
-                        <% if (departmentFeedback.page < departmentFeedback.pages) { %>
-                            <a class="btn btn--ghost btn--sm"
-                               href="<%= departmentPageUrl(departmentFeedback.page + 1) %>">
-                                Next
-                            </a>
-                        <% } else { %>
-                            <span></span>
-                        <% } %>
-                    </nav>
-                <% } %>
-            <% } %>
-        </section>
-
+    <% if (user.role === 'admin') { %>
+        <a class="btn btn--primary" href="/feedback/admin"><%- icon('list', 16) %>Manage feedback</a>
+    <% } else if (DEPT_ROLES.includes(user.role)) { %>
+        <a class="btn btn--primary" href="/feedback/department-inbox"><%- icon('inbox', 16) %>Open inbox</a>
     <% } else { %>
-
-        <section class="stat-grid" aria-label="Summary">
-            <div class="stat">
-                <span class="stat__num"><%= cards.total %></span>
-                <span class="stat__label">Total</span>
-            </div>
-            <div class="stat stat--pending">
-                <span class="stat__num"><%= cards.pending %></span>
-                <span class="stat__label">Pending</span>
-            </div>
-            <div class="stat stat--progress">
-                <span class="stat__num"><%= cards.active %></span>
-                <span class="stat__label">Active or awaiting admin review</span>
-            </div>
-            <div class="stat stat--resolved">
-                <span class="stat__num"><%= cards.resolved %></span>
-                <span class="stat__label">Resolved</span>
-            </div>
-        </section>
-
-        <section class="card card--flush">
-            <header class="card__head">
-                <h2><%= attention.title %></h2>
-                <% if (attention.link) { %>
-                    <a href="<%= attention.link.href %>">
-                        <%= attention.link.text %>
-                    </a>
-                <% } %>
-            </header>
-
-            <% if (attention.rows.length === 0) { %>
-                <p class="empty">Nothing here right now.</p>
-            <% } else { %>
-                <div class="table-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Submitted</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <% attention.rows.forEach(item => {
-                                const canOpen =
-                                    user.role === 'admin' ||
-                                    user.role === 'institutional_management' ||
-                                    DEPT_ROLES.includes(user.role);
-
-                                const href = canOpen
-                                    ? '/feedback/view/' + item.id
-                                    : '/feedback/track?code=' + encodeURIComponent(item.reference_code);
-                            %>
-                                <tr>
-                                    <td>
-                                        <a class="row-link" href="<%= href %>">
-                                            <%= item.subject %>
-                                        </a>
-                                        <span class="sub">
-                                            <%= formatRef(item.reference_code) %>
-                                        </span>
-                                    </td>
-                                    <td><%= item.category_name %></td>
-                                    <td>
-                                        <%- include('partials/status-badge', {
-                                            badgeStatus: item.status_name
-                                        }) %>
-                                    </td>
-                                    <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
-                                </tr>
-                            <% }) %>
-                        </tbody>
-                    </table>
-                </div>
-            <% } %>
-        </section>
-
+        <a class="btn btn--primary" href="/feedback/submit"><%- icon('send', 16) %>Send feedback</a>
     <% } %>
-
 </div>
+
+<%- include('partials/flash') %>
+
+<% if (noDepartment) { %>
+    <div class="alert alert--error" role="alert">
+        <%- icon('alert', 18) %>
+        <span>Your account has no department yet, so no feedback can be assigned to you. Ask an administrator to fix this.</span>
+    </div>
+<% } %>
+
+<p class="section-note"><%= scopeLabel %></p>
+<% if (departmentDashboard) { %>
+    <section class="stat-grid stat-grid--department" aria-label="Department feedback summary">
+        <div class="stat"><span class="stat__num"><%= cards.total %></span><span class="stat__label">Total Feedback</span></div>
+        <div class="stat stat--pending"><span class="stat__num"><%= cards.pendingAssigned %></span><span class="stat__label">Pending / Assigned</span></div>
+        <div class="stat"><span class="stat__num"><%= cards.underReview %></span><span class="stat__label">Under Review</span></div>
+        <div class="stat stat--progress"><span class="stat__num"><%= cards.inProgress %></span><span class="stat__label">In Progress</span></div>
+        <div class="stat"><span class="stat__num"><%= cards.awaitingAdminReview %></span><span class="stat__label">Awaiting Admin Review</span></div>
+        <div class="stat stat--resolved"><span class="stat__num"><%= cards.resolved %></span><span class="stat__label">Resolved</span></div>
+    </section>
+
+    <section class="card card--flush">
+        <header class="card__head"><h2>Feedback for <%= me.department_name || 'your department' %></h2></header>
+        <% if (!departmentFeedback || departmentFeedback.rows.length === 0) { %>
+            <p class="empty">No feedback is assigned to your department yet.</p>
+        <% } else { %>
+            <div class="table-wrap">
+                <table class="table table--list">
+                    <thead>
+                        <tr><th>Subject</th><th>Category</th><th>Status</th><th>Reference Number</th><th>Date Submitted</th><th>Action</th></tr>
+                    </thead>
+                    <tbody>
+                        <% departmentFeedback.rows.forEach(item => { %>
+                            <tr>
+                                <td><a class="row-link" href="/feedback/view/<%= item.id %>"><%= item.subject %></a></td>
+                                <td><%= item.category_name %></td>
+                                <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
+                                <td><%= formatRef(item.reference_code) %></td>
+                                <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
+                                <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+            <% if (departmentFeedback.pages > 1) { %>
+                <nav class="pager" aria-label="Department feedback pages">
+                    <% if (departmentFeedback.page > 1) { %>
+                        <a class="btn btn--ghost btn--sm" href="<%= departmentPageUrl(departmentFeedback.page - 1) %>">Previous</a>
+                    <% } else { %><span></span><% } %>
+                    <span class="pager__info">Page <%= departmentFeedback.page %> of <%= departmentFeedback.pages %></span>
+                    <% if (departmentFeedback.page < departmentFeedback.pages) { %>
+                        <a class="btn btn--ghost btn--sm" href="<%= departmentPageUrl(departmentFeedback.page + 1) %>">Next</a>
+                    <% } else { %><span></span><% } %>
+                </nav>
+            <% } %>
+        <% } %>
+    </section>
+<% } else { %>
+    <section class="stat-grid" aria-label="Summary">
+        <div class="stat"><span class="stat__num"><%= cards.total %></span><span class="stat__label">Total</span></div>
+        <div class="stat stat--pending"><span class="stat__num"><%= cards.pending %></span><span class="stat__label">Pending</span></div>
+        <div class="stat stat--progress"><span class="stat__num"><%= cards.active %></span><span class="stat__label">Active or awaiting admin review</span></div>
+        <div class="stat stat--resolved"><span class="stat__num"><%= cards.resolved %></span><span class="stat__label">Resolved</span></div>
+    </section>
+
+    <section class="card card--flush">
+        <header class="card__head">
+            <h2><%= attention.title %></h2>
+            <% if (attention.link) { %><a href="<%= attention.link.href %>"><%= attention.link.text %></a><% } %>
+        </header>
+
+        <% if (attention.rows.length === 0) { %>
+            <p class="empty">Nothing here right now.</p>
+        <% } else { %>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead><tr><th>Subject</th><th>Category</th><th>Status</th><th>Submitted</th></tr></thead>
+                    <tbody>
+                        <% attention.rows.forEach(item => {
+                            const canOpen = user.role === 'admin' || user.role === 'institutional_management' || DEPT_ROLES.includes(user.role);
+                            const href = canOpen ? '/feedback/view/' + item.id : '/feedback/track?code=' + item.reference_code; %>
+                            <tr>
+                                <td>
+                                    <a class="row-link" href="<%= href %>"><%= item.subject %></a>
+                                    <span class="sub"><%= formatRef(item.reference_code) %></span>
+                                </td>
+                                <td><%= item.category_name %></td>
+                                <td><%- include('partials/status-badge', { badgeStatus: item.status_name }) %></td>
+                                <td class="nowrap"><%= fmtDate(item.created_at, false) %></td>
+                            </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        <% } %>
+    </section>
+<% } %>
 
 <%- include('partials/staff-close') %>
 <%- include('partials/foot') %>

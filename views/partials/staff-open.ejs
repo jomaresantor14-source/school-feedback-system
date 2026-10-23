@@ -1,14 +1,10 @@
-
 <%
     const role = user.role;
     const deptStaff = DEPT_ROLES.includes(role);
     const path = currentUrl.split('?')[0];
     const query = new URLSearchParams(currentUrl.split('?')[1] || '');
     const onUnassigned = query.get('department') === 'unassigned';
-
-    const items = [
-        { href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }
-    ];
+    const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
 
     if (role === 'admin') {
         items.push(
@@ -19,18 +15,7 @@
             { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Approve Resolution', icon: 'check', statusName: 'Awaiting Admin Review' }
         );
     }
-
-    // Faculty-specific sidebar
-    if (role === 'faculty') {
-        items.push(
-            { href: '/feedback/department-inbox', label: 'Assigned Feedback', icon: 'inbox', inbox: true },
-            { href: '/feedback/department-inbox?category=faculty_concern', label: 'Faculty Concerns', icon: 'users' },
-            { href: '/feedback/department-inbox?category=faculty_suggestion', label: 'Faculty Suggestions', icon: 'list' },
-            { href: '/feedback/department-inbox?status_name=Awaiting+Admin+Review', label: 'Submitted to Admin', icon: 'send', statusName: 'Awaiting Admin Review' },
-            { href: '/feedback/department-history', label: 'Feedback History', icon: 'chart', history: true }
-        );
-    } else if (deptStaff) {
-        // Existing menu for other department staff
+    if (deptStaff) {
         items.push(
             { href: '/feedback/department-inbox', label: 'Inbox', icon: 'inbox', inbox: true },
             { href: '/feedback/department-inbox?status_name=Under+Review', label: 'Under Review', icon: 'eye', statusName: 'Under Review' },
@@ -39,34 +24,43 @@
             { href: '/feedback/department-history', label: 'Feedback History for Their Department', icon: 'chart', history: true }
         );
     }
+    if (role === 'institutional_management') items.push({ href: '/feedback/management', label: 'School overview', icon: 'eye' });
+    if (role === 'admin') items.push({ href: '/staff/reports', label: 'Reports and Analytics', icon: 'chart' });
+    else if (role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
 
-    if (role === 'institutional_management') {
-        items.push({
-            href: '/feedback/management',
-            label: 'School overview',
-            icon: 'eye'
-        });
-    }
-
-    if (role === 'admin') {
-        items.push({
-            href: '/staff/reports',
-            label: 'Reports and Analytics',
-            icon: 'chart'
-        });
-    } else if (role === 'institutional_management' || deptStaff) {
-        items.push({
-            href: '/staff/reports',
-            label: 'Reports',
-            icon: 'chart'
-        });
-    }
-
-    if (role === 'admin') {
-        items.push({
-            href: '/auth/create-staff',
-            label: 'Staff accounts',
-            icon: 'users'
-        });
-    }
+    if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
 %>
+<div class="app">
+    <aside class="sidebar">
+        <a class="brand brand--light" href="/staff/dashboard"><%- include('brand') %></a>
+
+        <nav class="side-nav" aria-label="Staff">
+            <% items.forEach(item => {
+                const current = item.unassigned
+                    ? path.startsWith('/feedback/admin') && onUnassigned
+                    : item.statusName
+                        ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
+                    : item.inbox
+                        ? path === item.href && !query.has('status_name')
+                        : path === item.href;
+            %>
+                <a href="<%= item.href %>"<%- current ? ' aria-current="page"' : '' %>>
+                    <%- icon(item.icon, 18) %><span><%= item.label %></span>
+                </a>
+            <% }) %>
+        </nav>
+
+        <div class="side-user">
+            <span class="avatar" aria-hidden="true"><%= initials(user.full_name) %></span>
+            <span class="side-user__text">
+                <strong><%= user.full_name %></strong>
+                <small><%= roleLabel(user.role) %></small>
+            </span>
+            <form action="/auth/logout" method="POST">
+                <%- include('csrf') %>
+                <button type="submit" class="icon-btn" title="Log out" aria-label="Log out"><%- icon('logout', 18) %></button>
+            </form>
+        </div>
+    </aside>
+
+    <main class="app-main" id="main">
