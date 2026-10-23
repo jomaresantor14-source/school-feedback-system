@@ -75,41 +75,55 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         attention.title = 'Recent activity';
         attention.link = { href: '/feedback/admin', text: 'View all feedback' };
         const [activity] = await db.query(
-            `SELECT activity.feedback_id AS id, activity.subject,
-                    activity.reference_code, activity.activity,
-                    activity.activity_at, activity.actor
+            `SELECT latest_activity.feedback_id AS id, latest_activity.subject,
+                    latest_activity.reference_code, latest_activity.activity,
+                    latest_activity.activity_at, latest_activity.actor
              FROM (
-                SELECT
-                    f.id AS feedback_id,
-                    f.subject,
-                    f.reference_code,
-                    CASE
-                        WHEN fh.old_status_id IS NULL THEN CONCAT('Submitted as ', new_status.status_name)
-                        ELSE CONCAT('Status changed: ', old_status.status_name, ' → ', new_status.status_name)
-                    END AS activity,
-                    fh.changed_at AS activity_at,
-                    COALESCE(actor.full_name, 'Submitter') AS actor
-                FROM feedback_history fh
-                JOIN feedback f ON f.id = fh.feedback_id
-                LEFT JOIN statuses old_status ON old_status.id = fh.old_status_id
-                JOIN statuses new_status ON new_status.id = fh.new_status_id
-                LEFT JOIN users actor ON actor.id = fh.changed_by
+                SELECT activity_events.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY activity_events.feedback_id
+                           ORDER BY activity_events.activity_at DESC,
+                                    activity_events.event_priority DESC,
+                                    activity_events.event_id DESC
+                       ) AS activity_rank
+                FROM (
+                    SELECT
+                        f.id AS feedback_id,
+                        f.subject,
+                        f.reference_code,
+                        CASE
+                            WHEN fh.old_status_id IS NULL THEN CONCAT('Submitted as ', new_status.status_name)
+                            ELSE CONCAT('Status changed: ', old_status.status_name, ' → ', new_status.status_name)
+                        END AS activity,
+                        fh.changed_at AS activity_at,
+                        COALESCE(actor.full_name, 'Submitter') AS actor,
+                        fh.id AS event_id,
+                        2 AS event_priority
+                    FROM feedback_history fh
+                    JOIN feedback f ON f.id = fh.feedback_id
+                    LEFT JOIN statuses old_status ON old_status.id = fh.old_status_id
+                    JOIN statuses new_status ON new_status.id = fh.new_status_id
+                    LEFT JOIN users actor ON actor.id = fh.changed_by
 
-                UNION ALL
+                    UNION ALL
 
-                SELECT
-                    f.id AS feedback_id,
-                    f.subject,
-                    f.reference_code,
-                    CONCAT('Assigned to ', new_department.department_name) AS activity,
-                    ah.changed_at AS activity_at,
-                    COALESCE(actor.full_name, 'Administrator') AS actor
-                FROM feedback_assignment_history ah
-                JOIN feedback f ON f.id = ah.feedback_id
-                JOIN departments new_department ON new_department.id = ah.new_department_id
-                LEFT JOIN users actor ON actor.id = ah.changed_by
-             ) activity
-             ORDER BY activity.activity_at DESC, activity.feedback_id DESC
+                    SELECT
+                        f.id AS feedback_id,
+                        f.subject,
+                        f.reference_code,
+                        CONCAT('Assigned to ', new_department.department_name) AS activity,
+                        ah.changed_at AS activity_at,
+                        COALESCE(actor.full_name, 'Administrator') AS actor,
+                        ah.id AS event_id,
+                        1 AS event_priority
+                    FROM feedback_assignment_history ah
+                    JOIN feedback f ON f.id = ah.feedback_id
+                    JOIN departments new_department ON new_department.id = ah.new_department_id
+                    LEFT JOIN users actor ON actor.id = ah.changed_by
+                ) activity_events
+             ) latest_activity
+             WHERE latest_activity.activity_rank = 1
+             ORDER BY latest_activity.activity_at DESC, latest_activity.feedback_id DESC
              LIMIT 8`
         );
         recentActivity = activity;
