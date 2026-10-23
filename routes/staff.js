@@ -47,9 +47,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
 
     const me = accounts[0];
     const departmentWorkflowShortcuts =
-        (me.role === 'guidance_staff' && me.department_name === 'Guidance Office') ||
-        (me.role === 'it_staff' && me.department_name === 'IT Department') ||
-        (me.role === 'department_head' && me.department_name === 'Facilities Department');
+        DEPT_ROLES.includes(me.role) && me.role !== 'faculty';
 
     // Keep the session in step with the database (role or department changes).
     req.session.user = {

@@ -961,6 +961,7 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
 
         if (isDepartmentStaff) {
             const transitions = {
+                Pending: user.role === 'faculty' ? [] : ['Under Review'],
                 Assigned: ['Under Review'],
                 'Under Review': ['In Progress'],
                 'In Progress': [],

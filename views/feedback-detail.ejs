@@ -69,6 +69,7 @@
                                     ];
                                 } else if (!isAdmin) {
                                     const transitions = {
+                                        Pending: user.role === 'faculty' ? [] : ['Under Review'],
                                         Assigned: ['Under Review'],
                                         'Under Review': ['Under Review', 'In Progress'],
                                         'In Progress': ['In Progress'],
