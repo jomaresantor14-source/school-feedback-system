@@ -562,7 +562,11 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
 
     const outcome = await db.withTransaction(async (conn) => {
         const [rows] = await conn.query(
-            'SELECT id, status_id, assigned_department_id FROM feedback WHERE id = ?',
+            `SELECT f.id, f.status_id, f.assigned_department_id, s.status_name
+             FROM feedback f
+             JOIN statuses s ON s.id = f.status_id
+             WHERE f.id = ?
+             LIMIT 1`,
             [id]
         );
 
@@ -570,8 +574,12 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
             return { type: 'missing' };
         }
 
+        const feedback = rows[0];
+        const oldStatusId = feedback.status_id;
+        const oldStatus = feedback.status_name;
+
         const [statusRows] = await conn.query(
-            'SELECT id, status_name FROM statuses WHERE id = ?',
+            'SELECT id, status_name FROM statuses WHERE id = ? LIMIT 1',
             [newStatusId]
         );
 
@@ -579,7 +587,34 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
             return { type: 'invalid' };
         }
 
-        const oldStatusId = rows[0].status_id;
+        const newStatus = statusRows[0].status_name;
+        const isAdmin = user.role === 'admin';
+        const isDepartmentStaff = DEPT_ROLES.includes(user.role);
+
+        if (
+            isDepartmentStaff &&
+            (
+                !feedback.assigned_department_id ||
+                Number(feedback.assigned_department_id) !== Number(user.department_id)
+            )
+        ) {
+            return { type: 'forbidden' };
+        }
+
+        if (isDepartmentStaff && newStatus === 'Resolved') {
+            return { type: 'forbidden_resolved' };
+        }
+
+        if (isAdmin && newStatus === 'Resolved' && oldStatus !== 'Awaiting Admin Review') {
+            return { type: 'must_review_first' };
+        }
+
+        if (
+            isDepartmentStaff &&
+            !['Under Review', 'In Progress', 'Awaiting Admin Review'].includes(newStatus)
+        ) {
+            return { type: 'invalid_transition' };
+        }
 
         if (oldStatusId === newStatusId && !remarks) {
             return { type: 'unchanged' };
@@ -601,13 +636,23 @@ router.post('/view/:id/status', requireRole('admin', ...DEPT_ROLES), async (req,
 
         return {
             type: oldStatusId === newStatusId ? 'note' : 'changed',
-            statusName: statusRows[0].status_name
+            statusName: newStatus
         };
     });
 
     switch (outcome.type) {
         case 'missing':
             return notFound(res);
+        case 'forbidden':
+        case 'forbidden_resolved':
+            flash(req, 'error', 'You are not allowed to make that status change.');
+            break;
+        case 'must_review_first':
+            flash(req, 'error', 'The department must submit this case for final review before it can be resolved.');
+            break;
+        case 'invalid_transition':
+            flash(req, 'error', 'Choose a status allowed for your department role.');
+            break;
         case 'invalid':
             flash(req, 'error', 'That status does not exist.');
             break;
@@ -664,9 +709,36 @@ router.post('/view/:id/assign', requireRole('admin'), async (req, res) => {
             return { type: 'unchanged', name: departmentRows[0].department_name };
         }
 
+        const [pendingRows] = await conn.query(
+            `SELECT id FROM statuses
+             WHERE status_name = 'Pending'
+             LIMIT 1`
+        );
+
+        const [assignedRows] = await conn.query(
+            `SELECT id FROM statuses
+             WHERE status_name = 'Assigned'
+             LIMIT 1`
+        );
+
+        if (assignedRows.length === 0) {
+            throw new Error('Assigned status is missing from the statuses table.');
+        }
+
         await conn.query(
-            'UPDATE feedback SET assigned_department_id = ? WHERE id = ?',
-            [departmentId, id]
+            `UPDATE feedback
+             SET assigned_department_id = ?,
+                 status_id = CASE
+                     WHEN status_id = ? THEN ?
+                     ELSE status_id
+                 END
+             WHERE id = ?`,
+            [
+                departmentId,
+                pendingRows.length ? pendingRows[0].id : -1,
+                assignedRows[0].id,
+                id
+            ]
         );
 
         await conn.query(

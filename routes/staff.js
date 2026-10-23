@@ -57,7 +57,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
 
     const scope = scopeFor(req.session.user);
     const { statuses } = await lookups();
-    const pending = statuses.find(s => s.status_name === 'Pending');
+    const assigned = statuses.find(s => s.status_name === 'Assigned');
 
     // The list shown under the numbers depends on the role.
     let attention = { title: 'Latest submissions', rows: [], link: null };
@@ -68,10 +68,10 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         attention.link = { href: '/feedback/admin?department=unassigned', text: 'See all unassigned' };
         listOptions.department = 'unassigned';
     } else if (DEPT_ROLES.includes(me.role)) {
-        attention.title = 'Pending in your department';
+        attention.title = 'Assigned to your department';
         attention.link = { href: '/feedback/department-inbox', text: 'Open department inbox' };
         listOptions.departmentId = scope.departmentId;
-        listOptions.statusId = pending ? pending.id : null;
+        listOptions.statusId = assigned ? assigned.id : null;
     } else if (me.role === 'institutional_management') {
         attention.title = 'Latest submissions';
         attention.link = { href: '/feedback/management', text: 'Open overview' };
@@ -98,7 +98,11 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         cards: {
             total,
             pending: countOf('Pending'),
-            active: countOf('Under Review') + countOf('In Progress'),
+            active:
+                countOf('Assigned') +
+                countOf('Under Review') +
+                countOf('In Progress') +
+                countOf('Awaiting Admin Review'),
             resolved: countOf('Resolved')
         },
         attention,

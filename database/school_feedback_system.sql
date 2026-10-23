@@ -150,7 +150,9 @@ INSERT INTO `statuses` (`id`, `status_name`) VALUES
 (3, 'In Progress'),
 (1, 'Pending'),
 (4, 'Resolved'),
-(2, 'Under Review');
+(2, 'Under Review'),
+(5, 'Assigned'),
+(6, 'Awaiting Admin Review');
 
 -- --------------------------------------------------------
 
@@ -277,7 +279,7 @@ ALTER TABLE `feedback_history`
 -- AUTO_INCREMENT for table `statuses`
 --
 ALTER TABLE `statuses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `users`

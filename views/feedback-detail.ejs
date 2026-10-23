@@ -56,8 +56,23 @@
                     <div class="field">
                         <label for="status_id">Status</label>
                         <select class="input" id="status_id" name="status_id" required>
-                            <% statuses.forEach(s => { %>
-                                <option value="<%= s.id %>" <%= s.id === feedback.status_id ? 'selected' : '' %>><%= s.status_name %></option>
+                            <%
+                                const isAdmin = user.role === 'admin';
+                                const availableStatuses = isAdmin
+                                    ? statuses.filter(s =>
+                                        ['Pending', 'Assigned', 'Under Review', 'In Progress',
+                                         'Awaiting Admin Review', 'Resolved'].includes(s.status_name)
+                                      )
+                                    : statuses.filter(s =>
+                                        ['Under Review', 'In Progress', 'Awaiting Admin Review'].includes(s.status_name)
+                                      );
+                            %>
+                            <% availableStatuses.forEach(s => { %>
+                                <option
+                                    value="<%= s.id %>"
+                                    <%= Number(s.id) === Number(feedback.status_id) ? 'selected' : '' %>>
+                                    <%= s.status_name %>
+                                </option>
                             <% }) %>
                         </select>
                     </div>
