@@ -100,9 +100,11 @@
                         <th>Category</th>
                         <th>Status</th>
                         <th>Department</th>
-                        <th><%= filters.statusName === 'Awaiting Admin Review' ? 'Date forwarded' : 'Submitted' %></th>
+                        <th><%= filters.statusName === 'Awaiting Admin Review' ? 'Date forwarded' : (locals.showResolvedDetails ? 'Resolved' : 'Submitted') %></th>
+                        <% if (locals.showLastUpdated) { %><th>Last updated</th><th>Department update</th><% } %>
                         <% if (mode === 'department') { %><th>Assigned</th><th>Last updated</th><th><%= filters.statusName === 'Awaiting Admin Review' ? 'Department action report' : 'Department note' %></th><% } %>
                         <% if (locals.showActionReport) { %><th>Last updated</th><th>Department action report</th><% } %>
+                        <% if (locals.showResolvedDetails) { %><th>Resolution response</th><% } %>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -141,7 +143,11 @@
                                     <%= item.department_name || 'Not assigned' %>
                                 <% } %>
                             </td>
-                            <td class="nowrap"><%= fmtDate(filters.statusName === 'Awaiting Admin Review' ? (item.date_forwarded || item.created_at) : item.created_at, false) %></td>
+                            <td class="nowrap"><%= fmtDate(filters.statusName === 'Awaiting Admin Review' ? (item.date_forwarded || item.created_at) : (locals.showResolvedDetails ? (item.last_updated_at || item.created_at) : item.created_at), false) %></td>
+                            <% if (locals.showLastUpdated) { %>
+                                <td class="nowrap"><%= fmtDate(item.last_updated_at || item.created_at, false) %></td>
+                                <td><%= item.latest_remarks || 'No department update recorded.' %></td>
+                            <% } %>
                             <% if (mode === 'department') { %>
                                 <td class="nowrap"><%= item.assigned_at ? fmtDate(item.assigned_at, false) : '—' %></td>
                                 <td class="nowrap"><%= fmtDate(item.last_updated_at || item.created_at, false) %></td>
@@ -150,6 +156,9 @@
                             <% if (locals.showActionReport) { %>
                                 <td class="nowrap"><%= fmtDate(item.date_forwarded || item.created_at, false) %></td>
                                 <td><%= item.latest_remarks || 'No department action report was recorded.' %></td>
+                            <% } %>
+                            <% if (locals.showResolvedDetails) { %>
+                                <td><%= item.admin_response || 'No administrator response was recorded.' %></td>
                             <% } %>
                             <td><a class="btn btn--ghost btn--sm" href="/feedback/view/<%= item.id %>">View Details</a></td>
                         </tr>

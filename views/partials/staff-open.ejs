@@ -3,20 +3,17 @@
     const deptStaff = DEPT_ROLES.includes(role);
     const currentPath = (currentUrl || '/').split('?')[0];
     const query = new URLSearchParams((currentUrl || '').split('?')[1] || '');
-    const onUnassigned = query.get('department') === 'unassigned';
     const feedbackType = String(query.get('feedback_type') || '');
     const statusName = String(query.get('status_name') || '');
 
     const isActive = (href, opts = {}) => {
         const base = String(href || '').split('?')[0];
-        const q = new URLSearchParams(String(href || '').split('?')[1] || '');
 
         if (opts.route) return currentPath === opts.route;
         if (opts.statusName) return currentPath === base && statusName === opts.statusName;
         if (opts.feedbackType) return currentPath === base && feedbackType === opts.feedbackType;
         if (opts.inbox) return currentPath === base && !statusName && !feedbackType;
         if (opts.history) return currentPath === base;
-        if (opts.unassigned) return currentPath.startsWith('/feedback/admin') && onUnassigned;
         return currentPath === base;
     };
 
@@ -25,10 +22,10 @@
     if (role === 'admin') {
         items.push(
             { href: '/feedback/pending', label: 'Pending Feedback', icon: 'inbox', route: '/feedback/pending' },
-            { href: '/feedback/unassigned', label: 'Unassigned', icon: 'list', route: '/feedback/unassigned' },
-            { href: '/feedback/assign', label: 'Assign Feedback', icon: 'users', route: '/feedback/assign' },
+            { href: '/feedback/assign', label: 'Department Assignment', icon: 'users', route: '/feedback/assign' },
+            { href: '/feedback/in-progress', label: 'In Progress', icon: 'list', route: '/feedback/in-progress' },
             { href: '/feedback/review', label: 'Admin Review', icon: 'eye', route: '/feedback/review' },
-            { href: '/feedback/resolutions', label: 'Resolutions', icon: 'check', route: '/feedback/resolutions' }
+            { href: '/feedback/resolutions', label: 'Resolved Feedback', icon: 'check', route: '/feedback/resolutions' }
         );
     }
 
@@ -56,7 +53,7 @@
     if (role === 'admin') items.push({ href: '/staff/reports', label: 'Reports and Analytics', icon: 'chart' });
     else if (role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
 
-    if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
+    if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff Accounts', icon: 'users' });
 %>
 <div class="app">
     <aside class="sidebar<%= role === 'faculty' ? ' sidebar--faculty' : '' %>">

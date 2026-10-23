@@ -324,6 +324,8 @@ async function renderList(req, res, config) {
     options.scopeUnassigned = Boolean(
         config.defaultOptions && config.defaultOptions.department === 'unassigned'
     );
+    options.excludeStatusNames = config.excludeStatusNames || [];
+    options.requireAssignedDepartment = Boolean(config.requireAssignedDepartment);
 
     const lists = await lookups();
 
@@ -432,29 +434,37 @@ router.get('/pending', requireRole('admin'), (req, res) =>
 );
 
 router.get('/unassigned', requireRole('admin'), (req, res) =>
-    renderList(req, res, {
-        mode: 'admin',
-        basePath: '/feedback/unassigned',
-        pageTitle: 'Unassigned Feedback',
-        intro: 'Submissions that do not currently have a handling department.',
-        defaultOptions: { department: 'unassigned' },
-        canAssign: false,
-        showDepartmentFilter: false,
-        showFeedbackTypeFilter: true,
-        showDateFilter: true
-    })
+    res.redirect('/feedback/assign')
 );
 
 router.get('/assign', requireRole('admin'), (req, res) =>
     renderList(req, res, {
         mode: 'admin',
         basePath: '/feedback/assign',
-        pageTitle: 'Assign Feedback',
-        intro: 'Review submissions and assign or reassign them to the appropriate department.',
+        pageTitle: 'Department Assignment',
+        intro: 'Review submissions without a handling department and assign them to the appropriate team.',
+        defaultOptions: { department: 'unassigned' },
+        excludeStatusNames: ['Resolved', 'Awaiting Admin Review'],
         canAssign: true,
         showDepartmentFilter: false,
         showFeedbackTypeFilter: true,
         showDateFilter: true
+    })
+);
+
+router.get('/in-progress', requireRole('admin'), (req, res) =>
+    renderList(req, res, {
+        mode: 'admin',
+        basePath: '/feedback/in-progress',
+        pageTitle: 'In Progress',
+        intro: 'Submissions currently being handled by their assigned departments.',
+        defaultOptions: { statusName: 'In Progress' },
+        requireAssignedDepartment: true,
+        canAssign: false,
+        showDepartmentFilter: true,
+        showFeedbackTypeFilter: true,
+        showDateFilter: true,
+        showLastUpdated: true
     })
 );
 
@@ -477,13 +487,14 @@ router.get('/resolutions', requireRole('admin'), (req, res) =>
     renderList(req, res, {
         mode: 'admin',
         basePath: '/feedback/resolutions',
-        pageTitle: 'Resolutions',
+        pageTitle: 'Resolved Feedback',
         intro: 'Feedback resolved by an administrator, including final responses.',
         defaultOptions: { statusName: 'Resolved' },
         canAssign: false,
         showDepartmentFilter: false,
         showFeedbackTypeFilter: true,
-        showDateFilter: true
+        showDateFilter: true,
+        showResolvedDetails: true
     })
 );
 

@@ -133,7 +133,7 @@
             </section>
         <% } %>
 
-        <% if (canAssign) { %>
+        <% if (canAssign && !['Resolved', 'Awaiting Admin Review'].includes(feedback.status_name)) { %>
             <section class="card">
                 <h2>Assign department</h2>
                 <form class="form" action="/feedback/view/<%= feedback.id %>/assign" method="POST" data-confirm="Assign this submission to the selected department?">

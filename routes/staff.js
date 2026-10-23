@@ -67,11 +67,50 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     let submittedToAdmin = { rows: [], total: 0 };
     let recentAssignments = [];
     let recentStatusUpdates = [];
+    let recentActivity = [];
 
     if (me.role === 'admin') {
-        attention.title = 'Waiting for a department';
-        attention.link = { href: '/feedback/admin?department=unassigned', text: 'See all unassigned' };
-        listOptions.department = 'unassigned';
+        attention.title = 'Recent activity';
+        attention.link = { href: '/feedback/admin', text: 'View all feedback' };
+        const [activity] = await db.query(
+            `SELECT activity.feedback_id AS id, activity.subject,
+                    activity.reference_code, activity.activity,
+                    activity.activity_at, activity.actor
+             FROM (
+                SELECT
+                    f.id AS feedback_id,
+                    f.subject,
+                    f.reference_code,
+                    CASE
+                        WHEN fh.old_status_id IS NULL THEN CONCAT('Submitted as ', new_status.status_name)
+                        ELSE CONCAT('Status changed: ', old_status.status_name, ' → ', new_status.status_name)
+                    END AS activity,
+                    fh.changed_at AS activity_at,
+                    COALESCE(actor.full_name, 'Submitter') AS actor
+                FROM feedback_history fh
+                JOIN feedback f ON f.id = fh.feedback_id
+                LEFT JOIN statuses old_status ON old_status.id = fh.old_status_id
+                JOIN statuses new_status ON new_status.id = fh.new_status_id
+                LEFT JOIN users actor ON actor.id = fh.changed_by
+
+                UNION ALL
+
+                SELECT
+                    f.id AS feedback_id,
+                    f.subject,
+                    f.reference_code,
+                    CONCAT('Assigned to ', new_department.department_name) AS activity,
+                    ah.changed_at AS activity_at,
+                    COALESCE(actor.full_name, 'Administrator') AS actor
+                FROM feedback_assignment_history ah
+                JOIN feedback f ON f.id = ah.feedback_id
+                JOIN departments new_department ON new_department.id = ah.new_department_id
+                LEFT JOIN users actor ON actor.id = ah.changed_by
+             ) activity
+             ORDER BY activity.activity_at DESC, activity.feedback_id DESC
+             LIMIT 8`
+        );
+        recentActivity = activity;
     } else if (DEPT_ROLES.includes(me.role)) {
         const page = Number(req.query.page) > 0 ? Number(req.query.page) : 1;
         departmentFeedback = await listFeedback({
@@ -144,7 +183,9 @@ router.get('/dashboard', requireLogin, async (req, res) => {
     const statScope = scope.all ? {} : scope;
     const [counts, list, typedCounts] = await Promise.all([
         statusCounts(statScope),
-        departmentFeedback ? Promise.resolve(null) : listFeedback(listOptions),
+        departmentFeedback || me.role === 'admin'
+            ? Promise.resolve(null)
+            : listFeedback(listOptions),
         me.role === 'faculty' && me.department_id
             ? feedbackTypeStatusCounts(me.department_id)
             : Promise.resolve([])
@@ -170,6 +211,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
         submittedToAdminTotal: submittedToAdmin.total,
         recentAssignments,
         recentStatusUpdates,
+        recentActivity,
         pendingConcernCount: typedCounts
             .filter(row => row.feedback_type === 'Concern' && ['Pending', 'Assigned'].includes(row.status_name))
             .reduce((sum, row) => sum + row.total, 0),
@@ -181,6 +223,7 @@ router.get('/dashboard', requireLogin, async (req, res) => {
             underReview: countOf('Under Review'),
             inProgress: countOf('In Progress'),
             awaitingAdminReview: countOf('Awaiting Admin Review'),
+            inProgress: countOf('In Progress'),
             resolved: countOf('Resolved'),
             pending: countOf('Pending'),
             active:
