@@ -49,17 +49,17 @@
         </div>
 
         <div class="stat stat--pending">
-            <span class="stat__num"><%= (facultyConcerns || []).length %></span>
+            <span class="stat__num"><%= facultyConcernsTotal %></span>
             <span class="stat__label">Faculty Concerns</span>
         </div>
 
         <div class="stat stat--progress">
-            <span class="stat__num"><%= (facultySuggestions || []).length %></span>
+            <span class="stat__num"><%= facultySuggestionsTotal %></span>
             <span class="stat__label">Faculty Suggestions</span>
         </div>
 
         <div class="stat">
-            <span class="stat__num"><%= (submittedToAdmin || []).length %></span>
+            <span class="stat__num"><%= submittedToAdminTotal %></span>
             <span class="stat__label">Submitted to Admin</span>
         </div>
     </section>

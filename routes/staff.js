@@ -90,7 +90,10 @@ router.get('/dashboard', requireLogin, async (req, res, next) => {
         res.locals.user = req.session.user;
 
         const scope = scopeFor(req.session.user);
-        const { statuses } = await lookups();
+        const { categories, statuses } = await lookups();
+        let facultyConcerns = { rows: [], total: 0 };
+        let facultySuggestions = { rows: [], total: 0 };
+        let submittedToAdmin = { rows: [], total: 0 };
 
         let attention = {
             title: 'Latest submissions',
@@ -109,7 +112,7 @@ router.get('/dashboard', requireLogin, async (req, res, next) => {
             };
 
             listOptions.department = 'unassigned';
-        } else if (DEPT_ROLES.includes(me.role)) {
+        } else if (DEPT_ROLES.includes(me.role) && me.role !== 'faculty') {
             // Department staff should only see feedback assigned
             // to their own department.
             if (!me.department_id) {
@@ -131,6 +134,36 @@ router.get('/dashboard', requireLogin, async (req, res, next) => {
                     perPage: 15
                 });
             }
+        } else if (me.role === 'faculty' && me.department_id) {
+            const concernCategory = categories.find(category =>
+                /faculty.*concern|concern.*faculty/i.test(category.category_name)
+            );
+            const suggestionCategory = categories.find(category =>
+                /faculty.*suggestion|suggestion.*faculty/i.test(category.category_name)
+            );
+
+            [facultyConcerns, facultySuggestions, submittedToAdmin] =
+                await Promise.all([
+                    concernCategory
+                        ? listFeedback({
+                            departmentId: me.department_id,
+                            categoryId: concernCategory.id,
+                            perPage: 15
+                        })
+                        : Promise.resolve(facultyConcerns),
+                    suggestionCategory
+                        ? listFeedback({
+                            departmentId: me.department_id,
+                            categoryId: suggestionCategory.id,
+                            perPage: 15
+                        })
+                        : Promise.resolve(facultySuggestions),
+                    listFeedback({
+                        departmentId: me.department_id,
+                        statusName: 'Awaiting Admin Review',
+                        perPage: 15
+                    })
+                ]);
         } else if (me.role === 'institutional_management') {
             attention.title = 'Latest submissions';
             attention.link = {
@@ -154,7 +187,7 @@ router.get('/dashboard', requireLogin, async (req, res, next) => {
 
         const [counts, list] = await Promise.all([
             statusCounts(statScope),
-            departmentFeedback
+            departmentFeedback || me.role === 'faculty'
                 ? Promise.resolve(null)
                 : listFeedback(listOptions)
         ]);
@@ -192,6 +225,12 @@ router.get('/dashboard', requireLogin, async (req, res, next) => {
             departmentDashboard: DEPT_ROLES.includes(me.role),
             departmentFeedback,
             departmentPageUrl,
+            facultyConcerns: facultyConcerns.rows,
+            facultyConcernsTotal: facultyConcerns.total,
+            facultySuggestions: facultySuggestions.rows,
+            facultySuggestionsTotal: facultySuggestions.total,
+            submittedToAdmin: submittedToAdmin.rows,
+            submittedToAdminTotal: submittedToAdmin.total,
 
             cards: {
                 total,
