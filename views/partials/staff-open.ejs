@@ -3,16 +3,30 @@
     const deptStaff = DEPT_ROLES.includes(role);
     const path = currentUrl.split('?')[0];
     const query = new URLSearchParams(currentUrl.split('?')[1] || '');
-    const onUnassigned = path === '/feedback/admin' && query.get('department') === 'unassigned';
+    const onUnassigned = query.get('department') === 'unassigned';
     const items = [{ href: '/staff/dashboard', label: 'Dashboard', icon: 'dashboard' }];
 
     if (role === 'admin') {
-        items.push({ href: '/feedback/admin', label: 'All feedback', icon: 'list' });
-        items.push({ href: '/feedback/admin?department=unassigned', label: 'Unassigned', icon: 'inbox', unassigned: true });
+        items.push(
+            { href: '/feedback/admin?status_name=Pending', label: 'New / Pending Feedback', icon: 'inbox', statusName: 'Pending' },
+            { href: '/feedback/admin?department=unassigned', label: 'Unassigned Feedback', icon: 'list', unassigned: true },
+            { href: '/feedback/admin?status_name=Assigned', label: 'Assign to Department', icon: 'users', statusName: 'Assigned' },
+            { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Awaiting Admin Review', icon: 'eye', statusName: 'Awaiting Admin Review' },
+            { href: '/feedback/admin?status_name=Awaiting+Admin+Review', label: 'Approve Resolution', icon: 'check', statusName: 'Awaiting Admin Review' }
+        );
     }
-    if (deptStaff) items.push({ href: '/feedback/department-inbox', label: 'Department inbox', icon: 'inbox' });
+    if (deptStaff) {
+        items.push(
+            { href: '/feedback/department-inbox?status_name=Assigned', label: 'Assigned Feedback', icon: 'inbox', statusName: 'Assigned' },
+            { href: '/feedback/department-inbox?status_name=Under+Review', label: 'Under Review', icon: 'eye', statusName: 'Under Review' },
+            { href: '/feedback/department-inbox?status_name=In+Progress', label: 'In Progress', icon: 'list', statusName: 'In Progress' },
+            { href: '/feedback/department-inbox?status_name=Awaiting+Admin+Review', label: 'Submit for Final Review', icon: 'send', statusName: 'Awaiting Admin Review' },
+            { href: '/feedback/department-inbox', label: 'Feedback History for Their Department', icon: 'chart', history: true }
+        );
+    }
     if (role === 'institutional_management') items.push({ href: '/feedback/management', label: 'School overview', icon: 'eye' });
-    if (role === 'admin' || role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
+    if (role === 'admin') items.push({ href: '/staff/reports', label: 'Reports and Analytics', icon: 'chart' });
+    else if (role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
 
     if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
 %>
@@ -23,8 +37,12 @@
         <nav class="side-nav" aria-label="Staff">
             <% items.forEach(item => {
                 const current = item.unassigned
-                    ? onUnassigned
-                    : (path === item.href && !(item.href === '/feedback/admin' && onUnassigned));
+                    ? path.startsWith('/feedback/admin') && onUnassigned
+                    : item.statusName
+                        ? path === item.href.split('?')[0] && query.get('status_name') === item.statusName
+                        : item.history
+                            ? path === item.href && !query.has('status_name')
+                            : path === item.href;
             %>
                 <a href="<%= item.href %>"<%- current ? ' aria-current="page"' : '' %>>
                     <%- icon(item.icon, 18) %><span><%= item.label %></span>

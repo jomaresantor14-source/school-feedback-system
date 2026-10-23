@@ -296,10 +296,18 @@ async function renderList(req, res, config) {
         lookups()
     ]);
 
+    if (filters.statusName) {
+        const selectedStatus = lists.statuses.find(
+            status => status.status_name === filters.statusName
+        );
+        filters.statusId = selectedStatus ? Number(selectedStatus.id) : null;
+    }
+
     const pageUrl = (page) => {
         const params = new URLSearchParams();
         if (filters.q) params.set('q', filters.q);
-        if (filters.statusId) params.set('status', filters.statusId);
+        if (filters.statusName) params.set('status_name', filters.statusName);
+        else if (filters.statusId) params.set('status', filters.statusId);
         if (filters.categoryId) params.set('category', filters.categoryId);
         if (filters.department && config.mode !== 'department') {
             params.set('department', filters.department);
@@ -312,6 +320,7 @@ async function renderList(req, res, config) {
     const filtersActive = Boolean(
         filters.q ||
         filters.statusId ||
+        filters.statusName ||
         filters.categoryId ||
         (filters.department && config.mode !== 'department')
     );
