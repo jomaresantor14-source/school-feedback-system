@@ -8,8 +8,15 @@
     if (deptStaff) items.push({ href: '/feedback/department-inbox', label: 'Department inbox', icon: 'inbox' });
     if (role === 'institutional_management') items.push({ href: '/feedback/management', label: 'School overview', icon: 'eye' });
     if (role === 'admin' || role === 'institutional_management' || deptStaff) items.push({ href: '/staff/reports', label: 'Reports', icon: 'chart' });
-    items.push({ href: '/feedback/my-submissions', label: 'My submissions', icon: 'user' });
-    items.push({ href: '/feedback/submit', label: 'Send feedback', icon: 'send' });
+
+    // CHANGED: admins get one "Public form" link instead of My submissions / Send feedback
+    if (role === 'admin') {
+        items.push({ href: '/feedback/submit', label: 'Public form', icon: 'send', external: true });
+    } else {
+        items.push({ href: '/feedback/my-submissions', label: 'My submissions', icon: 'user' });
+        items.push({ href: '/feedback/submit', label: 'Send feedback', icon: 'send' });
+    }
+
     if (role === 'admin') items.push({ href: '/auth/create-staff', label: 'Staff accounts', icon: 'users' });
 %>
 <div class="app">
@@ -18,7 +25,7 @@
 
         <nav class="side-nav" aria-label="Staff">
             <% items.forEach(item => { %>
-                <a href="<%= item.href %>"<%- path === item.href ? ' aria-current="page"' : '' %>>
+                <a href="<%= item.href %>"<%- path === item.href ? ' aria-current="page"' : '' %><%- item.external ? ' target="_blank" rel="noopener"' : '' %>>
                     <%- icon(item.icon, 18) %><span><%= item.label %></span>
                 </a>
             <% }) %>

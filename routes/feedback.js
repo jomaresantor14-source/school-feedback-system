@@ -30,16 +30,16 @@ function flash(req, type, message) {
 // Public: submit feedback
 // ---------------------------------------------------------------
 
-async function renderSubmitForm(req, res, { error = null, values = {} } = {}, status = 200) {
+async function renderSubmitForm(res, { error = null, values = {} } = {}, status = 200) {
     const [categories] = await db.query(
         'SELECT id, category_name FROM categories ORDER BY id ASC'
     );
 
-    // Logged-in users get their name and email filled in.
-    const me = req.session.user;
+    // CHANGED: this form is for students and guests, so nothing is prefilled,
+    // even when a staff member is logged in.
     const prefill = {
-        submitter_name: me ? me.full_name : '',
-        submitter_email: me ? me.email : '',
+        submitter_name: '',
+        submitter_email: '',
         ...values
     };
 
@@ -52,7 +52,7 @@ async function renderSubmitForm(req, res, { error = null, values = {} } = {}, st
 }
 
 router.get('/submit', async (req, res) => {
-    await renderSubmitForm(req, res);
+    await renderSubmitForm(res);
 });
 
 router.post('/submit', async (req, res) => {
@@ -69,7 +69,7 @@ router.post('/submit', async (req, res) => {
     };
 
     const showError = (message) =>
-        renderSubmitForm(req, res, { error: message, values }, 400);
+        renderSubmitForm(res, { error: message, values }, 400);
 
     if (!values.category_id || !values.subject || !values.description) {
         return showError('Choose a category and complete the subject and details.');
