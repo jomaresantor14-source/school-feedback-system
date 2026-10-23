@@ -454,6 +454,16 @@ select.input {
 .table--list th:first-child, .table--list td:first-child { padding-left: 22px; }
 .table--list td:first-child { min-width: 200px; max-width: 320px; }
 .table--list .input--sm { min-width: 0; width: 138px; }
+.table--history { min-width: 1180px; table-layout: fixed; }
+.table--history th:nth-child(1), .table--history td:nth-child(1) { width: 16%; }
+.table--history th:nth-child(2), .table--history td:nth-child(2) { width: 9%; }
+.table--history th:nth-child(3), .table--history td:nth-child(3) { width: 10%; }
+.table--history th:nth-child(4), .table--history td:nth-child(4) { width: 10%; }
+.table--history th:nth-child(5), .table--history td:nth-child(5),
+.table--history th:nth-child(6), .table--history td:nth-child(6) { width: 10%; }
+.table--history th:nth-child(7), .table--history td:nth-child(7),
+.table--history th:nth-child(8), .table--history td:nth-child(8) { width: 12%; }
+.table--history th:nth-child(9), .table--history td:nth-child(9) { width: 11%; }
 
 .empty { padding: 28px 24px; margin: 0; color: var(--muted); }
 .empty-card { text-align: center; padding: 48px 24px; }
