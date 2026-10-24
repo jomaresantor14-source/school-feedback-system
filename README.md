@@ -185,7 +185,9 @@ node scripts/set-password.js rene@school.edu "Test-Pass-2026"
 | Institutional Management | management.test@school.edu | Test-Pass-2026 |
 | Faculty | rene@school.edu | Test-Pass-2026 |
 
+
 Use these accounts only for local testing. Replace or remove them before deploying to a real environment.
+
 
 ## Project Structure
 
@@ -204,7 +206,9 @@ database/             SQL export of the database schema/data
 scripts/              Utility scripts such as password reset
 ```
 
+
 ## Known Limitations
+
 
 - Session data is stored in memory, so all users are logged out when the server restarts.
 - There is no dedicated change-password page; password updates are handled with the script in `scripts/`.
@@ -216,12 +220,18 @@ scripts/              Utility scripts such as password reset
 - The app uses plain HTTP in development; production deployment should use HTTPS.
 - There is no automated test suite included in the repository.
 
+
 ## AI Assistance Disclosure
+
 
 This project was developed with the assistance of Claude (Anthropic). The AI was used to help refactor the application, design page templates and styling, test scenarios against a local database copy, and assist with documentation.
 
+
 The team reviewed the final implementation and remains responsible for understanding and maintaining the codebase.
+
 
 ## License
 
+
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
