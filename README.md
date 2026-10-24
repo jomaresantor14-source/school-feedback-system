@@ -224,7 +224,7 @@ scripts/              Utility scripts such as password reset
 ## AI Assistance Disclosure
 
 
-This project was developed with the assistance of Claude (Anthropic). The AI was used to help refactor the application, design page templates and styling, test scenarios against a local database copy, and assist with documentation.
+This project was developed with the assistance of ChatGPT, Claude (Anthropic), and Copilot. The AI was used to help refactor the application, design page templates and styling, test scenarios against a local database copy, and assist with documentation.
 
 
 The team reviewed the final implementation and remains responsible for understanding and maintaining the codebase.
